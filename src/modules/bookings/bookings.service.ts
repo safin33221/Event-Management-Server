@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { getPaginationParams } from '../../common/dto/pagination.dto.js';
 import { computePercentagePoisha, toJsonPoisha } from '../../common/money/money.js';
+import { toAgencyLocalDate } from '../../common/time/timezone.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { ScheduleService } from '../schedule/schedule.service.js';
 import { DEFAULT_STUDIO_ID } from '../studio/studio.service.js';
@@ -318,25 +319,41 @@ export class BookingsService {
 
   async getBooking(bookingId: string) {
     return this.prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findUnique({
-        where: { id: bookingId },
-        include: {
-          sessions: {
-            include: {
-              reservations: { where: { status: ReservationStatus.RESERVED } },
+      const [booking, studio] = await Promise.all([
+        tx.booking.findUnique({
+          where: { id: bookingId },
+          include: {
+            sessions: {
+              include: {
+                reservations: {
+                  where: { status: ReservationStatus.RESERVED },
+                  include: {
+                    resource: { select: { id: true, name: true, type: true } },
+                  },
+                },
+              },
+              orderBy: { startAt: 'asc' },
             },
-            orderBy: { startAt: 'asc' },
+            deliverables: { orderBy: { createdAt: 'asc' } },
+            assignments: { orderBy: { createdAt: 'asc' } },
           },
-          deliverables: { orderBy: { createdAt: 'asc' } },
-          assignments: { orderBy: { createdAt: 'asc' } },
-        },
-      });
+        }),
+        tx.studioSettings.findUnique({
+          where: { id: DEFAULT_STUDIO_ID },
+          select: { timezone: true },
+        }),
+      ]);
       if (!booking) {
         throw new NotFoundException('Booking not found');
       }
+      const studioTimezone = studio?.timezone || 'Asia/Dhaka';
       const ledger = await this.paymentsService.computeLedgerSummaryTx(tx, bookingId);
       return {
         ...booking,
+        sessions: booking.sessions.map((s) => ({
+          ...s,
+          agencyLocalDate: toAgencyLocalDate(s.startAt, studioTimezone),
+        })),
         agreedTotalPoisha: toJsonPoisha(booking.agreedTotalPoisha),
         ledger,
       };
