@@ -23,6 +23,7 @@ import { computeRequiredAdvancePoisha, toJsonPoisha } from '../../common/money/m
 import { toAgencyLocalDate } from '../../common/time/timezone.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { ScheduleService } from '../schedule/schedule.service.js';
+import { buildBookingInvoicePdf } from './invoice-pdf.js';
 import { DEFAULT_STUDIO_ID, StudioService } from '../studio/studio.service.js';
 import {
   CancelBookingDto,
@@ -850,6 +851,16 @@ export class BookingsService {
         createdAt: a.createdAt,
       })),
       generatedAt: new Date().toISOString(),
+    };
+  }
+
+  async getBookingInvoicePdf(bookingId: string): Promise<{ filename: string; buffer: Buffer }> {
+    const receipt = await this.getBookingReceipt(bookingId);
+    const buffer = await buildBookingInvoicePdf(receipt);
+    const safeReference = receipt.booking.reference.replace(/[^a-zA-Z0-9_-]/g, '-');
+    return {
+      filename: `invoice-${safeReference}.pdf`,
+      buffer,
     };
   }
 }

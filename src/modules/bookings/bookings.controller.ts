@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Res,
+  StreamableFile,
+} from '@nestjs/common';
+import type { ServerResponse } from 'node:http';
 import { UserRole } from '../../generated/prisma/client.js';
 import { CurrentActor, Roles } from '../../common/guards/auth.guard.js';
 import type { RequestActor } from '../../common/guards/auth.guard.js';
@@ -35,6 +45,21 @@ export class BookingsController {
   @Get(':id/receipt')
   getReceipt(@Param('id') id: string) {
     return this.bookingsService.getBookingReceipt(id);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR, UserRole.ACCOUNTANT)
+  @Get(':id/invoice.pdf')
+  async getInvoicePdf(
+    @Param('id') id: string,
+    @Query('disposition') disposition: string | undefined,
+    @Res({ passthrough: true }) res: ServerResponse,
+  ): Promise<StreamableFile> {
+    const { filename, buffer } = await this.bookingsService.getBookingInvoicePdf(id);
+    const safeDisposition = disposition === 'inline' ? 'inline' : 'attachment';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `${safeDisposition}; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return new StreamableFile(buffer);
   }
 
   @Roles(UserRole.OWNER, UserRole.COORDINATOR)

@@ -411,6 +411,22 @@ describe.skipIf(!hasDatabase)('Softilo Single-Tenant Regression Suite (e2e)', ()
     expect(receiptRes.body.ledger.outstandingDuePoisha).toBe(4000000);
     expect(receiptRes.body.quote.items.length).toBeGreaterThan(0);
     expect(receiptRes.body.payments.length).toBe(1);
+
+    await request(server)
+      .get(`/bookings/${bookingId}/invoice.pdf`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .expect(403);
+
+    const pdfRes = await request(server)
+      .get(`/bookings/${bookingId}/invoice.pdf`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(pdfRes.headers['content-type']).toMatch(/application\/pdf/);
+    expect(pdfRes.headers['content-disposition']).toMatch(/attachment; filename="invoice-.*\.pdf"/);
+    const pdfPayload = Buffer.isBuffer(pdfRes.body)
+      ? pdfRes.body
+      : Buffer.from(pdfRes.text ?? '', 'latin1');
+    expect(pdfPayload.subarray(0, 5).toString('utf8')).toBe('%PDF-');
   });
 
   it('auto-provisions event-type deliverables and crew tasks on confirmation (wedding vs corporate)', async () => {
