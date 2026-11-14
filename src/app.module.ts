@@ -1,22 +1,49 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { AuthGuard } from './common/guards/auth.guard.js';
+import { AuthModule } from './modules/auth/auth.module.js';
+import { BookingsModule } from './modules/bookings/bookings.module.js';
+import { CatalogModule } from './modules/catalog/catalog.module.js';
+import { InquiriesModule } from './modules/inquiries/inquiries.module.js';
+import { OperationsModule } from './modules/operations/operations.module.js';
+import { PaymentsModule } from './modules/payments/payments.module.js';
+import { QuotesModule } from './modules/quotes/quotes.module.js';
+import { ScheduleModule } from './modules/schedule/schedule.module.js';
+import { StudioModule } from './modules/studio/studio.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com,
-    // then run `npx @nestjs/observe link` to write your key pair into .env.
+    ConfigModule.forRoot({ isGlobal: true }),
     ObserveModule.forRoot({
       appKey: process.env.OBSERVE_APP_KEY ?? 'YOUR_APP_KEY',
       appSecret: process.env.OBSERVE_APP_SECRET ?? 'YOUR_APP_SECRET',
       serviceId: 'event-management-server',
     }),
+    PrismaModule,
+    AuthModule,
+    StudioModule,
+    CatalogModule,
+    InquiriesModule,
+    QuotesModule,
+    PaymentsModule,
+    ScheduleModule,
+    BookingsModule,
+    OperationsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+  ],
 })
 export class AppModule {}

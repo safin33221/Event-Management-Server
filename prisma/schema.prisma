@@ -1,0 +1,581 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  COORDINATOR
+  ACCOUNTANT
+  STAFF
+}
+
+enum AdvancePolicyType {
+  NONE
+  PERCENTAGE
+  FIXED
+}
+
+enum InquiryStatus {
+  NEW
+  QUALIFIED
+  QUOTED
+  CONVERTED
+  CLOSED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  SUPERSEDED
+  EXPIRED
+  CANCELLED
+}
+
+enum QuoteVersionStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  SUPERSEDED
+}
+
+enum AcceptanceChannel {
+  PORTAL
+  PHONE
+  IN_PERSON
+  EMAIL
+  WHATSAPP
+}
+
+enum BookingStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum ResourceType {
+  CREW
+  EQUIPMENT
+  ROOM
+  OTHER
+}
+
+enum ReservationStatus {
+  RESERVED
+  RELEASED
+}
+
+enum PaymentType {
+  RECEIPT
+  REFUND
+}
+
+enum PaymentMethod {
+  BKASH
+  NAGAD
+  BANK
+  CASH
+  OTHER
+}
+
+enum VerificationState {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum AdjustmentType {
+  CREDIT_NOTE
+  REVERSAL
+  CHARGE_ADJUSTMENT
+}
+
+enum AdjustmentStatus {
+  APPROVED
+  VOID
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  ACCEPTED
+  COMPLETED
+  CANCELLED
+}
+
+enum DeliverableStatus {
+  PENDING
+  IN_PROGRESS
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  DELIVERED
+}
+
+model StudioSettings {
+  id                  String            @id @default("default")
+  name                String            @default("Softilo Event Management")
+  logoUrl             String?           @map("logo_url")
+  themeTokens         Json?             @map("theme_tokens")
+  contactDetails      Json?             @map("contact_details")
+  timezone            String            @default("Asia/Dhaka")
+  currency            String            @default("BDT")
+  advancePolicyType   AdvancePolicyType @default(PERCENTAGE) @map("advance_policy_type")
+  advancePolicyValue  BigInt            @default(20) @map("advance_policy_value")
+  operationalPolicies Json?             @map("operational_policies")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  @@map("studio_settings")
+}
+
+model SequenceCounter {
+  prefix    String
+  year      Int
+  lastValue Int    @default(0) @map("last_value")
+
+  @@id([prefix, year])
+  @@map("sequence_counters")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(STAFF)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  resources   Resource[]
+  assignments Assignment[]
+
+  @@index([role, isActive])
+  @@map("users")
+}
+
+model EventType {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  packages          Package[]
+  portfolioItems    PortfolioItem[]
+  taskTemplates     TaskTemplate[]
+  deliverableLabels DeliverableLabel[]
+  inquiries         Inquiry[]
+  quotes            Quote[]
+  bookings          Booking[]
+
+  @@map("event_types")
+}
+
+model ServiceItem {
+  id                     String   @id @default(uuid()) @db.Uuid
+  name                   String
+  description            String?
+  unitLabel              String   @default("unit") @map("unit_label")
+  defaultUnitPricePoisha BigInt   @map("default_unit_price_poisha")
+  isActive               Boolean  @default(true) @map("is_active")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  packageItems PackageItem[]
+
+  @@index([isActive])
+  @@map("service_items")
+}
+
+model Package {
+  id              String   @id @default(uuid()) @db.Uuid
+  eventTypeId     String?  @map("event_type_id") @db.Uuid
+  name            String
+  slug            String   @unique
+  description     String?
+  basePricePoisha BigInt   @map("base_price_poisha")
+  isActive        Boolean  @default(true) @map("is_active")
+  isPublished     Boolean  @default(false) @map("is_published")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  eventType EventType?    @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+  items     PackageItem[]
+  inquiries Inquiry[]
+
+  @@index([isPublished, isActive])
+  @@map("packages")
+}
+
+model PackageItem {
+  id              String  @id @default(uuid()) @db.Uuid
+  packageId       String  @map("package_id") @db.Uuid
+  serviceItemId   String? @map("service_item_id") @db.Uuid
+  description     String
+  quantity        Int     @default(1)
+  unitPricePoisha BigInt  @map("unit_price_poisha")
+
+  package     Package      @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  serviceItem ServiceItem? @relation(fields: [serviceItemId], references: [id], onDelete: SetNull)
+
+  @@index([packageId])
+  @@map("package_items")
+}
+
+model PortfolioItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  eventTypeId String?  @map("event_type_id") @db.Uuid
+  title       String
+  description String?
+  mediaUrl    String   @map("media_url")
+  isApproved  Boolean  @default(false) @map("is_approved")
+  isPublished Boolean  @default(false) @map("is_published")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  eventType EventType? @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+
+  @@index([isApproved, isPublished, sortOrder])
+  @@map("portfolio_items")
+}
+
+model TaskTemplate {
+  id                String  @id @default(uuid()) @db.Uuid
+  eventTypeId       String? @map("event_type_id") @db.Uuid
+  title             String
+  roleLabel         String  @map("role_label")
+  defaultOffsetDays Int     @default(0) @map("default_offset_days")
+  isActive          Boolean @default(true) @map("is_active")
+
+  eventType EventType? @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+
+  @@index([isActive])
+  @@map("task_templates")
+}
+
+model DeliverableLabel {
+  id             String  @id @default(uuid()) @db.Uuid
+  eventTypeId    String? @map("event_type_id") @db.Uuid
+  label          String  @unique
+  defaultDueDays Int     @default(14) @map("default_due_days")
+  isActive       Boolean @default(true) @map("is_active")
+
+  eventType EventType? @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+
+  @@map("deliverable_labels")
+}
+
+model Inquiry {
+  id            String        @id @default(uuid()) @db.Uuid
+  reference     String        @unique
+  eventTypeId   String?       @map("event_type_id") @db.Uuid
+  packageId     String?       @map("package_id") @db.Uuid
+  eventTitle    String        @map("event_title")
+  requestedDate DateTime?     @map("requested_date") @db.Date
+  clientName    String        @map("client_name")
+  clientPhone   String        @map("client_phone")
+  clientEmail   String?       @map("client_email")
+  notes         String?
+  metadata      Json?
+  source        String        @default("PUBLIC")
+  status        InquiryStatus @default(NEW)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  eventType EventType? @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+  package   Package?   @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  quotes    Quote[]
+
+  @@index([status, requestedDate])
+  @@map("inquiries")
+}
+
+model Quote {
+  id               String      @id @default(uuid()) @db.Uuid
+  inquiryId        String?     @map("inquiry_id") @db.Uuid
+  reference        String      @unique
+  eventTypeId      String?     @map("event_type_id") @db.Uuid
+  eventTitle       String      @map("event_title")
+  requestedDate    DateTime?   @map("requested_date") @db.Date
+  clientName       String      @map("client_name")
+  clientPhone      String      @map("client_phone")
+  clientEmail      String?     @map("client_email")
+  currency         String
+  status           QuoteStatus @default(DRAFT)
+  currentVersionId String?     @unique @map("current_version_id") @db.Uuid
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  inquiry   Inquiry?       @relation(fields: [inquiryId], references: [id], onDelete: SetNull)
+  eventType EventType?     @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+  versions  QuoteVersion[]
+  booking   Booking?
+
+  @@index([status])
+  @@map("quotes")
+}
+
+model QuoteVersion {
+  id              String             @id @default(uuid()) @db.Uuid
+  quoteId         String             @map("quote_id") @db.Uuid
+  versionNumber   Int                @map("version_number")
+  subtotalPoisha  BigInt             @map("subtotal_poisha")
+  discountPoisha  BigInt             @default(0) @map("discount_poisha")
+  totalPoisha     BigInt             @map("total_poisha")
+  terms           String?
+  validUntil      DateTime?          @map("valid_until") @db.Date
+  status          QuoteVersionStatus @default(DRAFT)
+  acceptedAt      DateTime?          @map("accepted_at")
+  acceptedBy      String?            @map("accepted_by")
+  acceptedChannel AcceptanceChannel? @map("accepted_channel")
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  quote           Quote           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  items           QuoteLineItem[]
+  acceptedBooking Booking?
+
+  @@unique([quoteId, versionNumber])
+  @@index([quoteId])
+  @@map("quote_versions")
+}
+
+model QuoteLineItem {
+  id              String  @id @default(uuid()) @db.Uuid
+  quoteVersionId  String  @map("quote_version_id") @db.Uuid
+  packageId       String? @map("package_id") @db.Uuid
+  serviceItemId   String? @map("service_item_id") @db.Uuid
+  description     String
+  quantity        Int
+  unitPricePoisha BigInt  @map("unit_price_poisha")
+  lineTotalPoisha BigInt  @map("line_total_poisha")
+  sortOrder       Int     @default(0) @map("sort_order")
+
+  quoteVersion QuoteVersion @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
+
+  @@index([quoteVersionId])
+  @@map("quote_line_items")
+}
+
+model Booking {
+  id                         String             @id @default(uuid()) @db.Uuid
+  reference                  String             @unique
+  quoteId                    String             @unique @map("quote_id") @db.Uuid
+  acceptedQuoteVersionId     String             @unique @map("accepted_quote_version_id") @db.Uuid
+  eventTypeId                String?            @map("event_type_id") @db.Uuid
+  eventTitle                 String             @map("event_title")
+  eventDate                  DateTime?          @map("event_date") @db.Date
+  clientName                 String             @map("client_name")
+  clientPhone                String             @map("client_phone")
+  clientEmail                String?            @map("client_email")
+  metadata                   Json?
+  currency                   String
+  agreedTotalPoisha          BigInt             @map("agreed_total_poisha")
+  advancePolicyTypeOverride  AdvancePolicyType? @map("advance_policy_type_override")
+  advancePolicyValueOverride BigInt?            @map("advance_policy_value_override")
+  status                     BookingStatus      @default(PENDING_CONFIRMATION)
+  confirmedAt                DateTime?          @map("confirmed_at")
+  confirmedById              String?            @map("confirmed_by_id") @db.Uuid
+  version                    Int                @default(1)
+  createdAt                  DateTime           @default(now()) @map("created_at")
+  updatedAt                  DateTime           @updatedAt @map("updated_at")
+
+  quote                Quote             @relation(fields: [quoteId], references: [id])
+  acceptedQuoteVersion QuoteVersion      @relation(fields: [acceptedQuoteVersionId], references: [id])
+  eventType            EventType?        @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+  sessions             EventSession[]
+  paymentEntries       PaymentEntry[]
+  priceAdjustments     PriceAdjustment[]
+  assignments          Assignment[]
+  deliverables         Deliverable[]
+
+  @@index([status, eventDate])
+  @@map("bookings")
+}
+
+model Resource {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String
+  type      ResourceType
+  userId    String?      @map("user_id") @db.Uuid
+  isActive  Boolean      @default(true) @map("is_active")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  user         User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reservations ResourceReservation[]
+
+  @@index([type, isActive])
+  @@map("resources")
+}
+
+model EventSession {
+  id        String        @id @default(uuid()) @db.Uuid
+  bookingId String        @map("booking_id") @db.Uuid
+  title     String
+  startAt   DateTime      @map("start_at")
+  endAt     DateTime      @map("end_at")
+  location  String?
+  status    SessionStatus @default(SCHEDULED)
+  notes     String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  booking      Booking               @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reservations ResourceReservation[]
+  assignments  Assignment[]
+
+  @@index([startAt, endAt])
+  @@index([bookingId])
+  @@map("event_sessions")
+}
+
+model ResourceReservation {
+  id         String            @id @default(uuid()) @db.Uuid
+  sessionId  String            @map("session_id") @db.Uuid
+  resourceId String            @map("resource_id") @db.Uuid
+  startAt    DateTime          @map("start_at")
+  endAt      DateTime          @map("end_at")
+  status     ReservationStatus @default(RESERVED)
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
+
+  session  EventSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  resource Resource     @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@index([resourceId, status, startAt, endAt])
+  @@map("resource_reservations")
+}
+
+model ScheduleAuditLog {
+  id              String    @id @default(uuid()) @db.Uuid
+  bookingId       String    @map("booking_id") @db.Uuid
+  sessionId       String?   @map("session_id") @db.Uuid
+  action          String
+  reason          String
+  changedById     String    @map("changed_by_id") @db.Uuid
+  previousStartAt DateTime? @map("previous_start_at")
+  previousEndAt   DateTime? @map("previous_end_at")
+  newStartAt      DateTime? @map("new_start_at")
+  newEndAt        DateTime? @map("new_end_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([bookingId, createdAt])
+  @@map("schedule_audit_logs")
+}
+
+model PaymentEntry {
+  id                String            @id @default(uuid()) @db.Uuid
+  bookingId         String            @map("booking_id") @db.Uuid
+  type              PaymentType
+  method            PaymentMethod
+  amountPoisha      BigInt            @map("amount_poisha")
+  currency          String
+  transactionRef    String?           @map("transaction_ref")
+  verificationState VerificationState @default(PENDING) @map("verification_state")
+  idempotencyKey    String?           @map("idempotency_key")
+  payloadHash       String?           @map("payload_hash")
+  recordedById      String            @map("recorded_by_id") @db.Uuid
+  verifiedById      String?           @map("verified_by_id") @db.Uuid
+  verifiedAt        DateTime?         @map("verified_at")
+  reason            String?
+  relatedEntryId    String?           @map("related_entry_id") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([type, idempotencyKey])
+  @@index([bookingId, verificationState])
+  @@map("payment_entries")
+}
+
+model PriceAdjustment {
+  id               String           @id @default(uuid()) @db.Uuid
+  bookingId        String           @map("booking_id") @db.Uuid
+  type             AdjustmentType
+  amountPoisha     BigInt           @map("amount_poisha")
+  currency         String
+  reason           String
+  status           AdjustmentStatus @default(APPROVED)
+  actorId          String           @map("actor_id") @db.Uuid
+  relatedPaymentId String?          @map("related_payment_id") @db.Uuid
+  idempotencyKey   String?          @map("idempotency_key")
+  payloadHash      String?          @map("payload_hash")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([type, idempotencyKey])
+  @@index([bookingId, status])
+  @@map("price_adjustments")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  details    Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Assignment {
+  id             String           @id @default(uuid()) @db.Uuid
+  bookingId      String           @map("booking_id") @db.Uuid
+  sessionId      String?          @map("session_id") @db.Uuid
+  assigneeUserId String           @map("assignee_user_id") @db.Uuid
+  roleLabel      String           @map("role_label")
+  notes          String?
+  status         AssignmentStatus @default(ASSIGNED)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  booking  Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  session  EventSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  assignee User          @relation(fields: [assigneeUserId], references: [id])
+
+  @@index([assigneeUserId, status])
+  @@index([bookingId])
+  @@map("assignments")
+}
+
+model Deliverable {
+  id             String            @id @default(uuid()) @db.Uuid
+  bookingId      String            @map("booking_id") @db.Uuid
+  label          String
+  assigneeUserId String?           @map("assignee_user_id") @db.Uuid
+  dueAt          DateTime?         @map("due_at")
+  reviewStatus   DeliverableStatus @default(PENDING) @map("review_status")
+  deliveredAt    DateTime?         @map("delivered_at")
+  deliveryUrl    String?           @map("delivery_url")
+  notes          String?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([dueAt, reviewStatus])
+  @@map("deliverables")
+}
