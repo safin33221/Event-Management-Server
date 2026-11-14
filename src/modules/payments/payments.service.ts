@@ -7,6 +7,7 @@ import {
 import {
   AdjustmentStatus,
   AdjustmentType,
+  AdvancePolicyType,
   PaymentEntry,
   PaymentType,
   Prisma,
@@ -14,7 +15,12 @@ import {
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { hashIdempotencyPayload } from '../../common/crypto/hash.js';
-import { sumPoisha, toJsonPoisha, toPoisha } from '../../common/money/money.js';
+import {
+  computeRequiredAdvancePoisha,
+  sumPoisha,
+  toJsonPoisha,
+  toPoisha,
+} from '../../common/money/money.js';
 import {
   CreateAdjustmentDto,
   IssueRefundDto,
@@ -32,6 +38,8 @@ export interface BookingLedgerSummary {
   completedRefundsPoisha: number;
   outstandingDuePoisha: number;
   customerCreditPoisha: number;
+  requiredAdvancePoisha: number;
+  isAdvanceMet: boolean;
 }
 
 @Injectable()
@@ -62,13 +70,34 @@ export class PaymentsService {
     tx: Prisma.TransactionClient,
     bookingId: string,
   ): Promise<BookingLedgerSummary> {
-    const booking = await tx.booking.findUnique({
-      where: { id: bookingId },
-      select: { id: true, currency: true, agreedTotalPoisha: true },
-    });
+    const [booking, studio] = await Promise.all([
+      tx.booking.findUnique({
+        where: { id: bookingId },
+        select: {
+          id: true,
+          currency: true,
+          agreedTotalPoisha: true,
+          advancePolicyTypeOverride: true,
+          advancePolicyValueOverride: true,
+        },
+      }),
+      tx.studioSettings.findUnique({
+        where: { id: 'default' },
+        select: { advancePolicyType: true, advancePolicyValue: true },
+      }),
+    ]);
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }
+
+    const policyType =
+      booking.advancePolicyTypeOverride ?? studio?.advancePolicyType ?? AdvancePolicyType.PERCENTAGE;
+    const policyValue = booking.advancePolicyValueOverride ?? studio?.advancePolicyValue ?? 20n;
+    const requiredAdvance = computeRequiredAdvancePoisha(
+      booking.agreedTotalPoisha,
+      policyType,
+      policyValue,
+    );
 
     const [entries, adjustments] = await Promise.all([
       tx.paymentEntry.findMany({
@@ -139,6 +168,8 @@ export class PaymentsService {
       completedRefundsPoisha: toJsonPoisha(completedRefunds),
       outstandingDuePoisha: toJsonPoisha(outstandingDue),
       customerCreditPoisha: toJsonPoisha(customerCredit),
+      requiredAdvancePoisha: toJsonPoisha(requiredAdvance),
+      isAdvanceMet: verifiedReceipts >= requiredAdvance,
     };
   }
 
@@ -259,10 +290,15 @@ export class PaymentsService {
       if (!existing) {
         throw new NotFoundException('Payment entry not found');
       }
+      const booking = await tx.booking.findUnique({
+        where: { id: existing.bookingId },
+        select: { status: true },
+      });
       if (existing.verificationState === VerificationState.VERIFIED) {
         return {
           entry: this.serializeEntry(existing),
           ledger: await this.computeLedgerSummaryTx(tx, existing.bookingId),
+          bookingStatus: booking?.status ?? null,
         };
       }
       if (existing.verificationState === VerificationState.REJECTED) {
@@ -295,6 +331,7 @@ export class PaymentsService {
       return {
         entry: this.serializeEntry(updated),
         ledger,
+        bookingStatus: booking?.status ?? null,
       };
     });
   }

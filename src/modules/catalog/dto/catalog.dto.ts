@@ -182,6 +182,21 @@ export class CreateDeliverableLabelDto {
   defaultDueDays?: number;
 }
 
+export class UpdateDeliverableLabelDto {
+  @IsOptional()
+  @IsString()
+  label?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  defaultDueDays?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
 export class CreateTaskTemplateDto {
   @IsOptional()
   @IsUUID()
@@ -196,4 +211,22 @@ export class CreateTaskTemplateDto {
   @IsOptional()
   @IsInt()
   defaultOffsetDays?: number;
+}
+
+export class UpdateTaskTemplateDto {
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  roleLabel?: string;
+
+  @IsOptional()
+  @IsInt()
+  defaultOffsetDays?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

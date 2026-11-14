@@ -2,6 +2,7 @@ import { BookingStatus } from '../../../generated/prisma/client.js';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
@@ -24,6 +25,14 @@ export class ConfirmBookingDto {
   @ValidateNested({ each: true })
   @Type(() => CreateSessionDto)
   sessions?: CreateSessionDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  autoProvisionDeliverables?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  autoProvisionTasks?: boolean;
 }
 
 export class CancelBookingDto {

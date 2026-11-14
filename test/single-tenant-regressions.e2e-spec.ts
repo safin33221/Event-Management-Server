@@ -390,5 +390,179 @@ describe.skipIf(!hasDatabase)('Softilo Single-Tenant Regression Suite (e2e)', ()
       .set('Authorization', `Bearer ${ownerToken}`)
       .expect(200);
     expect(ledgerAfterDelivery.body.summary.outstandingDuePoisha).toBe(4000000);
+
+    // 7. Automation alerts & digital receipt authorization + math check
+    await request(server)
+      .get('/bookings/automation-alerts')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .expect(403);
+
+    await request(server)
+      .get(`/bookings/${bookingId}/receipt`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .expect(403);
+
+    const receiptRes = await request(server)
+      .get(`/bookings/${bookingId}/receipt`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(receiptRes.body.booking.reference).toBeTruthy();
+    expect(receiptRes.body.ledger.verifiedReceiptsPoisha).toBe(1000000);
+    expect(receiptRes.body.ledger.outstandingDuePoisha).toBe(4000000);
+    expect(receiptRes.body.quote.items.length).toBeGreaterThan(0);
+    expect(receiptRes.body.payments.length).toBe(1);
+  });
+
+  it('auto-provisions event-type deliverables and crew tasks on confirmation (wedding vs corporate)', async () => {
+    const server = app.getHttpServer();
+
+    const loginRes = await request(server)
+      .post('/auth/login')
+      .send({ email: 'e2e-owner@softilo.test', password: 'OwnerPass123!' })
+      .expect(201);
+    const ownerToken = loginRes.body.accessToken as string;
+
+    // Fetch active event types (public endpoint)
+    const eventTypesRes = await request(server).get('/public/event-types').expect(200);
+    const eventTypes = eventTypesRes.body as Array<{ id: string; slug: string; name: string }>;
+    const weddingType = eventTypes.find((et) => et.slug === 'wedding');
+    expect(weddingType).toBeTruthy();
+
+    // Ensure corporate event type exists (create if studio was seeded prior to adding corporate to preset)
+    let corporateType = eventTypes.find((et) => et.slug === 'corporate-event');
+    if (!corporateType) {
+      const createdCorp = await request(server)
+        .post('/catalog/event-types')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          name: 'Corporate Event',
+          slug: 'corporate-event',
+          description: 'Conferences and corporate gatherings',
+        })
+        .expect(201);
+      corporateType = createdCorp.body;
+      createdIds.eventTypeIds.push(corporateType!.id);
+
+      await request(server)
+        .post('/catalog/deliverable-labels')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          eventTypeId: corporateType!.id,
+          label: `Corporate Summary ${Date.now()}`,
+          defaultDueDays: 5,
+        })
+        .expect(201);
+    }
+
+    // Create wedding quote -> accept -> pay required 20% advance -> confirm
+    const wQuoteRes = await request(server)
+      .post('/quotes')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        eventTypeId: weddingType!.id,
+        eventTitle: 'Nadia & Farhan Wedding',
+        requestedDate: '2026-12-28',
+        clientName: 'Nadia Islam',
+        clientPhone: '+8801712345678',
+        items: [{ description: 'Signature Wedding Collection', quantity: 1, unitPricePoisha: 5000000 }],
+      })
+      .expect(201);
+    createdIds.quoteIds.push(wQuoteRes.body.id);
+
+    const wAcceptRes = await request(server)
+      .post(`/quotes/${wQuoteRes.body.id}/accept`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ acceptedBy: 'Nadia Islam', acceptedChannel: 'WHATSAPP' })
+      .expect(201);
+    const wBookingId = wAcceptRes.body.booking.id as string;
+    createdIds.bookingIds.push(wBookingId);
+
+    // Record Tk 15,000 advance (30% of Tk 50,000) -> verify -> automation alerts shows readyToConfirm
+    const payRes = await request(server)
+      .post(`/bookings/${wBookingId}/payments`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        method: 'NAGAD',
+        amountPoisha: 1500000,
+        transactionRef: `NAG-E2E-${Date.now()}`,
+      })
+      .expect(201);
+
+    const vRes = await request(server)
+      .post(`/payments/${payRes.body.entry.id}/verify`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(201);
+    expect(vRes.body.ledger.isAdvanceMet).toBe(true);
+
+    const alertsBefore = await request(server)
+      .get('/bookings/automation-alerts')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(
+      (alertsBefore.body.readyToConfirmBookings as Array<{ id: string }>).some(
+        (b) => b.id === wBookingId,
+      ),
+    ).toBe(true);
+
+    const wConfirmRes = await request(server)
+      .post(`/bookings/${wBookingId}/confirm`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({})
+      .expect(201);
+    expect(wConfirmRes.body.deliverables.length).toBeGreaterThanOrEqual(3);
+    expect(wConfirmRes.body.assignments.length).toBeGreaterThanOrEqual(2);
+
+    const wDetail = await request(server)
+      .get(`/bookings/${wBookingId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    const wDelLabels = (wDetail.body.deliverables as Array<{ label: string }>).map((d) => d.label);
+    expect(wDelLabels).toContain('Gallery');
+    expect(wDelLabels).toContain('Film');
+    expect(wDelLabels).toContain('Album');
+    expect(wDetail.body.assignments.length).toBeGreaterThanOrEqual(2);
+
+    // Corporate booking confirms without wedding deliverables/albums
+    const cQuoteRes = await request(server)
+      .post('/quotes')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        eventTypeId: corporateType!.id,
+        eventTitle: 'Dhaka FinTech Townhall',
+        requestedDate: '2026-12-29',
+        clientName: 'FinTech Corp',
+        clientPhone: '+8801911223344',
+        items: [{ description: 'Corporate Summit Coverage', quantity: 1, unitPricePoisha: 3000000 }],
+      })
+      .expect(201);
+    createdIds.quoteIds.push(cQuoteRes.body.id);
+
+    const cAcceptRes = await request(server)
+      .post(`/quotes/${cQuoteRes.body.id}/accept`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ acceptedBy: 'Admin Lead', acceptedChannel: 'EMAIL' })
+      .expect(201);
+    const cBookingId = cAcceptRes.body.booking.id as string;
+    createdIds.bookingIds.push(cBookingId);
+
+    const cPay = await request(server)
+      .post(`/bookings/${cBookingId}/payments`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ method: 'BANK', amountPoisha: 1000000, transactionRef: `BNK-E2E-${Date.now()}` })
+      .expect(201);
+
+    await request(server)
+      .post(`/payments/${cPay.body.entry.id}/verify`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(201);
+
+    const cConfirm = await request(server)
+      .post(`/bookings/${cBookingId}/confirm`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({})
+      .expect(201);
+    const cLabels = (cConfirm.body.deliverables as Array<{ label: string }>).map((d) => d.label);
+    expect(cLabels).not.toContain('Album');
+    expect(cLabels.length).toBeGreaterThanOrEqual(1);
   });
 });

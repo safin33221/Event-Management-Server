@@ -9,8 +9,10 @@ import {
   CreatePortfolioItemDto,
   CreateServiceItemDto,
   CreateTaskTemplateDto,
+  UpdateDeliverableLabelDto,
   UpdatePackageDto,
   UpdatePortfolioItemDto,
+  UpdateTaskTemplateDto,
 } from './dto/catalog.dto.js';
 
 @Injectable()
@@ -42,6 +44,7 @@ export class CatalogService {
   private serializePackage(pkg: {
     id: string;
     eventTypeId: string | null;
+    eventType?: { id: string; name: string; slug: string } | null;
     name: string;
     slug: string;
     description: string | null;
@@ -59,6 +62,7 @@ export class CatalogService {
     return {
       id: pkg.id,
       eventTypeId: pkg.eventTypeId,
+      eventType: pkg.eventType ?? undefined,
       name: pkg.name,
       slug: pkg.slug,
       description: pkg.description,
@@ -202,7 +206,10 @@ export class CatalogService {
     const { page, limit, skip } = getPaginationParams(query);
     const [items, total] = await Promise.all([
       this.prisma.package.findMany({
-        include: { items: true },
+        include: {
+          items: true,
+          eventType: { select: { id: true, name: true, slug: true } },
+        },
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
         skip,
         take: limit,
@@ -222,7 +229,10 @@ export class CatalogService {
     const [items, total] = await Promise.all([
       this.prisma.package.findMany({
         where,
-        include: { items: true },
+        include: {
+          items: true,
+          eventType: { select: { id: true, name: true, slug: true } },
+        },
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
         skip,
         take: limit,
@@ -301,12 +311,30 @@ export class CatalogService {
         label: dto.label.trim(),
         defaultDueDays: dto.defaultDueDays ?? 14,
       },
+      include: { eventType: { select: { id: true, name: true, slug: true } } },
+    });
+  }
+
+  async updateDeliverableLabel(id: string, dto: UpdateDeliverableLabelDto) {
+    const existing = await this.prisma.deliverableLabel.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Deliverable label not found');
+    }
+    return this.prisma.deliverableLabel.update({
+      where: { id },
+      data: {
+        label: dto.label?.trim(),
+        defaultDueDays: dto.defaultDueDays,
+        isActive: dto.isActive,
+      },
+      include: { eventType: { select: { id: true, name: true, slug: true } } },
     });
   }
 
   async listDeliverableLabels() {
     return this.prisma.deliverableLabel.findMany({
       where: { isActive: true },
+      include: { eventType: { select: { id: true, name: true, slug: true } } },
       orderBy: { label: 'asc' },
     });
   }
@@ -320,12 +348,31 @@ export class CatalogService {
         roleLabel: dto.roleLabel.trim(),
         defaultOffsetDays: dto.defaultOffsetDays ?? 0,
       },
+      include: { eventType: { select: { id: true, name: true, slug: true } } },
+    });
+  }
+
+  async updateTaskTemplate(id: string, dto: UpdateTaskTemplateDto) {
+    const existing = await this.prisma.taskTemplate.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Task template not found');
+    }
+    return this.prisma.taskTemplate.update({
+      where: { id },
+      data: {
+        title: dto.title?.trim(),
+        roleLabel: dto.roleLabel?.trim(),
+        defaultOffsetDays: dto.defaultOffsetDays,
+        isActive: dto.isActive,
+      },
+      include: { eventType: { select: { id: true, name: true, slug: true } } },
     });
   }
 
   async listTaskTemplates() {
     return this.prisma.taskTemplate.findMany({
       where: { isActive: true },
+      include: { eventType: { select: { id: true, name: true, slug: true } } },
       orderBy: { defaultOffsetDays: 'asc' },
     });
   }

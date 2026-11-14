@@ -10,8 +10,10 @@ import {
   CreatePortfolioItemDto,
   CreateServiceItemDto,
   CreateTaskTemplateDto,
+  UpdateDeliverableLabelDto,
   UpdatePackageDto,
   UpdatePortfolioItemDto,
+  UpdateTaskTemplateDto,
 } from './dto/catalog.dto.js';
 
 @Controller('catalog')
@@ -75,6 +77,15 @@ export class CatalogController {
     return this.catalogService.createDeliverableLabel(dto);
   }
 
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Patch('deliverable-labels/:id')
+  updateDeliverableLabel(
+    @Param('id') id: string,
+    @Body() dto: UpdateDeliverableLabelDto,
+  ) {
+    return this.catalogService.updateDeliverableLabel(id, dto);
+  }
+
   @Get('deliverable-labels')
   listDeliverableLabels() {
     return this.catalogService.listDeliverableLabels();
@@ -84,6 +95,12 @@ export class CatalogController {
   @Post('task-templates')
   createTaskTemplate(@Body() dto: CreateTaskTemplateDto) {
     return this.catalogService.createTaskTemplate(dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Patch('task-templates/:id')
+  updateTaskTemplate(@Param('id') id: string, @Body() dto: UpdateTaskTemplateDto) {
+    return this.catalogService.updateTaskTemplate(id, dto);
   }
 
   @Get('task-templates')

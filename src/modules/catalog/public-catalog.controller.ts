@@ -8,6 +8,11 @@ import { CatalogService } from './catalog.service.js';
 export class PublicCatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
+  @Get('event-types')
+  listPublicEventTypes() {
+    return this.catalogService.listEventTypes();
+  }
+
   @Get('packages')
   listPublicPackages(@Query() query: PaginationQueryDto) {
     return this.catalogService.listPublicPackages(query);

@@ -20,9 +20,21 @@ export class BookingsController {
   }
 
   @Roles(UserRole.OWNER, UserRole.COORDINATOR, UserRole.ACCOUNTANT)
+  @Get('automation-alerts')
+  getAutomationAlerts() {
+    return this.bookingsService.getAutomationAlerts();
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR, UserRole.ACCOUNTANT)
   @Get(':id')
   getOne(@Param('id') id: string) {
     return this.bookingsService.getBooking(id);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR, UserRole.ACCOUNTANT)
+  @Get(':id/receipt')
+  getReceipt(@Param('id') id: string) {
+    return this.bookingsService.getBookingReceipt(id);
   }
 
   @Roles(UserRole.OWNER, UserRole.COORDINATOR)

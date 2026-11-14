@@ -257,19 +257,26 @@ export class StudioService {
       },
     });
 
-    await tx.eventType.createMany({
-      data: [
-        {
-          name: 'Holud / Mehndi',
-          slug: 'holud-mehndi',
-          description: 'Pre-wedding cultural celebration coverage',
-        },
-        {
-          name: 'Reception',
-          slug: 'reception',
-          description: 'Evening reception photography and film',
-        },
-      ],
+    const holudType = await tx.eventType.create({
+      data: {
+        name: 'Holud / Mehndi',
+        slug: 'holud-mehndi',
+        description: 'Pre-wedding cultural celebration coverage',
+      },
+    });
+    const receptionType = await tx.eventType.create({
+      data: {
+        name: 'Reception',
+        slug: 'reception',
+        description: 'Evening reception photography and film',
+      },
+    });
+    const corporateType = await tx.eventType.create({
+      data: {
+        name: 'Corporate Event',
+        slug: 'corporate-event',
+        description: 'Conferences, summits, and corporate gatherings',
+      },
     });
 
     const photoService = await tx.serviceItem.create({
@@ -327,11 +334,70 @@ export class StudioService {
       },
     });
 
+    await tx.package.create({
+      data: {
+        eventTypeId: holudType.id,
+        name: 'Holud & Mehndi Vivid Coverage',
+        slug: 'holud-mehndi-vivid-coverage',
+        description: 'Candid & stage photography plus same-night teaser selects',
+        basePricePoisha: 3000000n,
+        isPublished: true,
+        items: {
+          create: [
+            {
+              serviceItemId: photoService.id,
+              description: 'Lead & Candid Photography (Evening)',
+              quantity: 1,
+              unitPricePoisha: 1800000n,
+            },
+            {
+              serviceItemId: filmService.id,
+              description: 'Holud Cinematography & Highlight Reel',
+              quantity: 1,
+              unitPricePoisha: 1200000n,
+            },
+          ],
+        },
+      },
+    });
+
+    await tx.package.create({
+      data: {
+        eventTypeId: corporateType.id,
+        name: 'Corporate Summit Coverage',
+        slug: 'corporate-summit-coverage',
+        description: 'Keynote, panel, and networking documentation with fast press gallery',
+        basePricePoisha: 3500000n,
+        isPublished: true,
+        items: {
+          create: [
+            {
+              serviceItemId: photoService.id,
+              description: 'Corporate Event Photographer (Full Day)',
+              quantity: 1,
+              unitPricePoisha: 2000000n,
+            },
+            {
+              serviceItemId: filmService.id,
+              description: 'Aftermovie & Speaker Highlights',
+              quantity: 1,
+              unitPricePoisha: 1500000n,
+            },
+          ],
+        },
+      },
+    });
+
     await tx.deliverableLabel.createMany({
       data: [
         { eventTypeId: weddingType.id, label: 'Gallery', defaultDueDays: 14 },
         { eventTypeId: weddingType.id, label: 'Film', defaultDueDays: 30 },
         { eventTypeId: weddingType.id, label: 'Album', defaultDueDays: 45 },
+        { eventTypeId: holudType.id, label: 'Holud Gallery', defaultDueDays: 7 },
+        { eventTypeId: holudType.id, label: 'Holud Teaser Reel', defaultDueDays: 14 },
+        { eventTypeId: receptionType.id, label: 'Reception Gallery', defaultDueDays: 14 },
+        { eventTypeId: receptionType.id, label: 'Reception Highlight Film', defaultDueDays: 30 },
+        { eventTypeId: corporateType.id, label: 'Event Summary', defaultDueDays: 5 },
       ],
     });
 
@@ -348,6 +414,36 @@ export class StudioService {
           title: 'Event coverage',
           roleLabel: 'Lead Photographer',
           defaultOffsetDays: 0,
+        },
+        {
+          eventTypeId: weddingType.id,
+          title: 'RAW backup & photo culling',
+          roleLabel: 'Editor',
+          defaultOffsetDays: 2,
+        },
+        {
+          eventTypeId: holudType.id,
+          title: 'Venue lighting & stage check',
+          roleLabel: 'Coordinator',
+          defaultOffsetDays: -1,
+        },
+        {
+          eventTypeId: holudType.id,
+          title: 'Holud evening coverage',
+          roleLabel: 'Lead Photographer',
+          defaultOffsetDays: 0,
+        },
+        {
+          eventTypeId: receptionType.id,
+          title: 'Reception shot-list confirmation',
+          roleLabel: 'Coordinator',
+          defaultOffsetDays: -2,
+        },
+        {
+          eventTypeId: corporateType.id,
+          title: 'AV & schedule run-through',
+          roleLabel: 'Coordinator',
+          defaultOffsetDays: -1,
         },
       ],
     });

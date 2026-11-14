@@ -40,3 +40,17 @@ export function computePercentagePoisha(amountPoisha: bigint, percentage: bigint
   // Round up to nearest poisha if fractional, or exact integer division
   return (amountPoisha * percentage + 99n) / 100n;
 }
+
+export function computeRequiredAdvancePoisha(
+  agreedTotalPoisha: bigint,
+  policyType: 'NONE' | 'PERCENTAGE' | 'FIXED',
+  policyValue: bigint,
+): bigint {
+  if (policyType === 'NONE') {
+    return 0n;
+  }
+  if (policyType === 'FIXED') {
+    return policyValue > agreedTotalPoisha ? agreedTotalPoisha : policyValue;
+  }
+  return computePercentagePoisha(agreedTotalPoisha, policyValue);
+}

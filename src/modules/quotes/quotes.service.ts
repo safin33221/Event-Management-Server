@@ -130,13 +130,23 @@ export class QuotesService {
   }
 
   async createQuote(currency: string, dto: CreateQuoteDto) {
+    let resolvedEventTypeId = dto.eventTypeId ?? null;
     if (dto.inquiryId) {
       const inquiry = await this.prisma.inquiry.findUnique({
         where: { id: dto.inquiryId },
-        select: { id: true },
+        select: { id: true, eventTypeId: true, packageId: true },
       });
       if (!inquiry) {
         throw new BadRequestException('Inquiry not found');
+      }
+      if (!resolvedEventTypeId && inquiry.eventTypeId) {
+        resolvedEventTypeId = inquiry.eventTypeId;
+      } else if (!resolvedEventTypeId && inquiry.packageId) {
+        const pkg = await this.prisma.package.findUnique({
+          where: { id: inquiry.packageId },
+          select: { eventTypeId: true },
+        });
+        resolvedEventTypeId = pkg?.eventTypeId ?? null;
       }
     }
     if (dto.eventTypeId) {
@@ -146,6 +156,15 @@ export class QuotesService {
       });
       if (!et) {
         throw new BadRequestException('EventType not found');
+      }
+    } else if (!resolvedEventTypeId) {
+      const firstPkgId = dto.items.find((i) => Boolean(i.packageId))?.packageId;
+      if (firstPkgId) {
+        const pkg = await this.prisma.package.findUnique({
+          where: { id: firstPkgId },
+          select: { eventTypeId: true },
+        });
+        resolvedEventTypeId = pkg?.eventTypeId ?? null;
       }
     }
 
@@ -161,7 +180,7 @@ export class QuotesService {
         data: {
           inquiryId: dto.inquiryId ?? null,
           reference,
-          eventTypeId: dto.eventTypeId ?? null,
+          eventTypeId: resolvedEventTypeId,
           eventTitle: dto.eventTitle.trim(),
           requestedDate: dto.requestedDate
             ? new Date(`${dto.requestedDate}T00:00:00.000Z`)
