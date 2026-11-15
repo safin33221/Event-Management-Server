@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { BookingStatus, Prisma, ReservationStatus, SessionStatus } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -15,7 +16,13 @@ import {
   CreateResourceDto,
   CreateSessionDto,
   RescheduleSessionDto,
+  ResourceAvailabilityQueryDto,
 } from './dto/schedule.dto.js';
+import {
+  buildIcsCalendar,
+  signCalendarFeedToken,
+  verifyCalendarFeedToken,
+} from './ical.js';
 
 @Injectable()
 export class ScheduleService {
@@ -328,5 +335,221 @@ export class ScheduleService {
         agencyLocalDate: toAgencyLocalDate(s.startAt, studioTimezone),
       })),
     };
+  }
+
+  async checkResourceAvailability(query: ResourceAvailabilityQueryDto) {
+    const startAt = new Date(query.startAt);
+    const endAt = new Date(query.endAt);
+    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || endAt <= startAt) {
+      throw new BadRequestException('Invalid startAt / endAt interval');
+    }
+
+    const [resources, conflicts] = await Promise.all([
+      this.prisma.resource.findMany({
+        where: { isActive: true },
+        orderBy: [{ type: 'asc' }, { name: 'asc' }],
+      }),
+      this.prisma.resourceReservation.findMany({
+        where: {
+          status: ReservationStatus.RESERVED,
+          startAt: { lt: endAt },
+          endAt: { gt: startAt },
+          sessionId: query.excludeSessionId ? { not: query.excludeSessionId } : undefined,
+          session: { status: { not: SessionStatus.CANCELLED } },
+        },
+        include: {
+          session: {
+            select: {
+              id: true,
+              title: true,
+              startAt: true,
+              endAt: true,
+              booking: { select: { reference: true, eventTitle: true } },
+            },
+          },
+        },
+        orderBy: { startAt: 'asc' },
+      }),
+    ]);
+
+    const conflictByResource = new Map<string, (typeof conflicts)[number]>();
+    for (const row of conflicts) {
+      if (!conflictByResource.has(row.resourceId)) {
+        conflictByResource.set(row.resourceId, row);
+      }
+    }
+
+    return {
+      startAt: startAt.toISOString(),
+      endAt: endAt.toISOString(),
+      resources: resources.map((resource) => {
+        const hit = conflictByResource.get(resource.id);
+        return {
+          ...resource,
+          available: !hit,
+          conflict: hit
+            ? {
+                sessionId: hit.session.id,
+                title: hit.session.title,
+                startAt: hit.session.startAt,
+                endAt: hit.session.endAt,
+                bookingReference: hit.session.booking?.reference ?? null,
+                eventTitle: hit.session.booking?.eventTitle ?? null,
+              }
+            : null,
+        };
+      }),
+    };
+  }
+
+  async getSessionIcs(sessionId: string): Promise<{ filename: string; ics: string }> {
+    const [session, studio] = await Promise.all([
+      this.prisma.eventSession.findUnique({
+        where: { id: sessionId },
+        include: {
+          booking: {
+            select: { reference: true, eventTitle: true, clientName: true },
+          },
+          reservations: {
+            where: { status: ReservationStatus.RESERVED },
+            include: { resource: { select: { name: true } } },
+          },
+        },
+      }),
+      this.prisma.studioSettings.findUnique({
+        where: { id: 'default' },
+        select: { name: true, timezone: true },
+      }),
+    ]);
+
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const studioName = studio?.name || 'Softilo Event Management';
+    const timezone = studio?.timezone || 'Asia/Dhaka';
+    const crewNames = session.reservations.map((r) => r.resource.name).join(', ');
+    const summaryPrefix = session.booking ? `[${session.booking.reference}] ` : '';
+    const descLines = [
+      session.booking ? `Booking: ${session.booking.reference} - ${session.booking.eventTitle}` : null,
+      session.booking ? `Client: ${session.booking.clientName}` : null,
+      crewNames ? `Crew & Gear: ${crewNames}` : null,
+      session.notes ? `Notes: ${session.notes}` : null,
+    ].filter((line): line is string => Boolean(line));
+
+    const ics = buildIcsCalendar({
+      calendarName: studioName,
+      timezone,
+      events: [
+        {
+          id: session.id,
+          title: `${summaryPrefix}${session.title}`,
+          startAt: session.startAt,
+          endAt: session.endAt,
+          location: session.location,
+          description: descLines.join('\n'),
+          status: session.status,
+        },
+      ],
+    });
+
+    const safeSlug = (session.booking?.reference || session.id).replace(/[^a-zA-Z0-9_-]/g, '-');
+    return { filename: `session-${safeSlug}.ics`, ics };
+  }
+
+  async getStudioCalendarIcs(
+    from?: string,
+    to?: string,
+    includeClientDetails = true,
+  ): Promise<{ filename: string; ics: string }> {
+    const studio = await this.prisma.studioSettings.findUnique({
+      where: { id: 'default' },
+      select: { name: true, timezone: true },
+    });
+    const studioName = studio?.name || 'Softilo Event Management';
+    const timezone = studio?.timezone || 'Asia/Dhaka';
+
+    let startUtc: Date;
+    let endUtcExclusive: Date;
+    if (from && to) {
+      const range = getUtcRangeForLocalDateRange(from, to, timezone);
+      startUtc = range.startUtc;
+      endUtcExclusive = range.endUtcExclusive;
+    } else {
+      const now = Date.now();
+      startUtc = new Date(now - 30 * 86_400_000);
+      endUtcExclusive = new Date(now + 365 * 86_400_000);
+    }
+
+    const sessions = await this.prisma.eventSession.findMany({
+      where: {
+        status: { not: SessionStatus.CANCELLED },
+        startAt: { lt: endUtcExclusive },
+        endAt: { gt: startUtc },
+      },
+      include: {
+        booking: {
+          select: { reference: true, eventTitle: true, clientName: true },
+        },
+        reservations: {
+          where: { status: ReservationStatus.RESERVED },
+          include: { resource: { select: { name: true } } },
+        },
+      },
+      orderBy: [{ startAt: 'asc' }, { id: 'asc' }],
+    });
+
+    const ics = buildIcsCalendar({
+      calendarName: `${studioName} Schedule`,
+      timezone,
+      events: sessions.map((session) => {
+        const crewNames = session.reservations.map((r) => r.resource.name).join(', ');
+        const summaryPrefix = session.booking ? `[${session.booking.reference}] ` : '';
+        const descLines = [
+          session.booking ? `Booking: ${session.booking.reference} - ${session.booking.eventTitle}` : null,
+          includeClientDetails && session.booking ? `Client: ${session.booking.clientName}` : null,
+          crewNames ? `Crew & Gear: ${crewNames}` : null,
+          includeClientDetails && session.notes ? `Notes: ${session.notes}` : null,
+        ].filter((line): line is string => Boolean(line));
+
+        return {
+          id: session.id,
+          title: `${summaryPrefix}${session.title}`,
+          startAt: session.startAt,
+          endAt: session.endAt,
+          location: session.location,
+          description: descLines.join('\n'),
+          status: session.status,
+        };
+      }),
+    });
+
+    return { filename: 'studio-schedule.ics', ics };
+  }
+
+  async getSubscriptionInfo() {
+    const secret = process.env.AUTH_SECRET;
+    if (!secret || secret.length < 16) {
+      throw new BadRequestException('AUTH_SECRET must be configured for calendar subscriptions');
+    }
+    const studio = await this.prisma.studioSettings.findUnique({
+      where: { id: 'default' },
+      select: { name: true, timezone: true },
+    });
+    const token = signCalendarFeedToken(secret);
+    return {
+      studioName: studio?.name || 'Softilo Event Management',
+      timezone: studio?.timezone || 'Asia/Dhaka',
+      feedPath: `/public/calendar/feed.ics?token=${encodeURIComponent(token)}`,
+    };
+  }
+
+  async getPublicFeedIcs(token: string | undefined) {
+    const secret = process.env.AUTH_SECRET ?? '';
+    if (!verifyCalendarFeedToken(token, secret)) {
+      throw new UnauthorizedException('Invalid or expired calendar subscription token');
+    }
+    // Publicly subscribable feed omits client phone/email/notes for privacy
+    return this.getStudioCalendarIcs(undefined, undefined, false);
   }
 }

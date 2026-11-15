@@ -1,0 +1,109 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Softilo Event Management//Studio Schedule//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Wedding PhotoArt Schedule
+X-WR-TIMEZONE:Asia/Dhaka
+BEGIN:VEVENT
+UID:97561d55-838f-4cb1-8a33-33f846b1e7d0@softilo.events
+DTSTAMP:20261115T083030Z
+DTSTART:20261101T113000Z
+DTEND:20261101T170000Z
+SUMMARY:[BKG-2026-0003] Gaye Holud & Cultural Stage Coverage
+LOCATION:Sena Malancha\, Dhaka Cantonment
+DESCRIPTION:Booking: BKG-2026-0003 - Nafisa & Samin Gaye Holud — Sena Mal
+ ancha\nClient: Nafisa & Samin Rahman\nCrew & Gear: Mehedi Hasan (Senior Ci
+ nematographer)\, Sadia Rahman (Candid & Colorist)
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:8be1000e-feac-48ec-80b0-75d60bbfa20f@softilo.events
+DTSTAMP:20261115T083030Z
+DTSTART:20261106T063000Z
+DTEND:20261106T110000Z
+SUMMARY:[BKG-2026-0004] Akika Feast & Family Portraits
+LOCATION:Radisson Blu Bay View\, Chattogram
+DESCRIPTION:Booking: BKG-2026-0004 - Aarav Chowdhury Akika Celebration — 
+ Radisson Blu Chattogram\nClient: Tariq & Humayra Chowdhury\nCrew & Gear: A
+ riful Islam (Lead Photographer)\, Rafiqul Alam (Drone & Gimbal Pilot)
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:e59dcd2e-aecb-4ec8-8667-f96f2ca6fe2d@softilo.events
+DTSTAMP:20261115T083030Z
+DTSTART:20261118T110000Z
+DTEND:20261118T160000Z
+SUMMARY:[BKG-2026-0005] Day 1: Mehendi & Intimate Family Portraits
+LOCATION:Sector 7 Residence\, Uttara\, Dhaka
+DESCRIPTION:Booking: BKG-2026-0005 - Maliha & Zubayer Royal Wedding — Pan
+  Pacific Sonargaon\nClient: Maliha & Zubayer Hossain\nCrew & Gear: Sadia R
+ ahman (Candid & Colorist)\, Ariful Islam (Lead Photographer)
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:692e11a9-7455-4b94-b01d-d434de895565@softilo.events
+DTSTAMP:20261115T083030Z
+DTSTART:20261119T120000Z
+DTEND:20261119T175900Z
+SUMMARY:[BKG-2026-0005] Day 2: Grand Ballroom Wedding & Drone Portraits
+LOCATION:Pan Pacific Sonargaon\, Karwan Bazar\, Dhaka
+DESCRIPTION:Booking: BKG-2026-0005 - Maliha & Zubayer Royal Wedding — Pan
+  Pacific Sonargaon\nClient: Maliha & Zubayer Hossain\nCrew & Gear: DJI Mav
+ ic 3 Pro Cine Drone\, Sony FX6 + RS4 Gimbal Kit A\, Mehedi Hasan (Senior C
+ inematographer)\, Ariful Islam (Lead Photographer)\, Rafiqul Alam (Drone &
+  Gimbal Pilot)
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:6687d0f7-63b6-45e6-94bf-861e77b9a766@softilo.events
+DTSTAMP:20261115T083030Z
+DTSTART:20261120T083000Z
+DTEND:20261120T133000Z
+SUMMARY:[BKG-2026-0008] Afternoon Nikkah Vows & Rooftop Couple Portraits
+LOCATION:Lakeshore Hotel Rooftop\, Gulshan-2\, Dhaka
+DESCRIPTION:Booking: BKG-2026-0008 - Tasnim & Mashrur Nikkah Ceremony — L
+ akeshore Gulshan\nClient: Tasnim & Mashrur Karim\nCrew & Gear: Sadia Rahma
+ n (Candid & Colorist)\, Ariful Islam (Lead Photographer)
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:55e41051-a1a8-437e-a8e7-5f8e8fccc260@softilo.events
+DTSTAMP:20261115T083030Z
+DTSTART:20261122T030000Z
+DTEND:20261122T140000Z
+SUMMARY:[BKG-2026-0007] Expo Keynote\, Booths & Awards Evening
+LOCATION:Radisson Blu Water Garden\, Dhaka
+DESCRIPTION:Booking: BKG-2026-0007 - Grameen Digital Innovation Expo — Ra
+ disson Water Garden\nClient: Grameen Digital Health Ltd.\nCrew & Gear: Son
+ y FX6 + RS4 Gimbal Kit A\, Mehedi Hasan (Senior Cinematographer)\, Sadia R
+ ahman (Candid & Colorist)
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:1e574a8b-0117-4154-8876-5321e6fcf9a4@softilo.events
+DTSTAMP:20261115T083030Z
+DTSTART:20261126T120000Z
+DTEND:20261126T173000Z
+SUMMARY:[BKG-2026-0010] Gaye Holud Ceremony & Stage Performances
+LOCATION:Spectra Convention Centre\, Gulshan-1\, Dhaka
+DESCRIPTION:Booking: BKG-2026-0010 - Fariha & Adnan Holud Night — Spectra
+  Convention Centre\nClient: Fariha & Adnan Mahmud\nCrew & Gear: Sony FX6 +
+  RS4 Gimbal Kit A\, Mehedi Hasan (Senior Cinematographer)\, Sadia Rahman (
+ Candid & Colorist)
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:ab33b3a1-f164-45eb-a884-fd5f954b6415@softilo.events
+DTSTAMP:20261115T083030Z
+DTSTART:20261128T050000Z
+DTEND:20261128T150000Z
+SUMMARY:[BKG-2026-0009] Outdoor Resort Wedding & Sunset Drone Portraits
+LOCATION:Bhawal Resort & Spa\, Gazipur
+DESCRIPTION:Booking: BKG-2026-0009 - Shaila & Tawhid Destination Resort Wed
+ ding — Bhawal Gazipur\nClient: Shaila & Tawhid Islam\nCrew & Gear: DJI M
+ avic 3 Pro Cine Drone\, Mehedi Hasan (Senior Cinematographer)\, Ariful Isl
+ am (Lead Photographer)\, Rafiqul Alam (Drone & Gimbal Pilot)
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR
