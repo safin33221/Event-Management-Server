@@ -44,7 +44,7 @@ export class InquiriesService {
 
     return this.prisma.$transaction(async (tx) => {
       const reference = await this.prisma.nextReference(tx, 'INQ');
-      return tx.inquiry.create({
+      const created = await tx.inquiry.create({
         data: {
           reference,
           eventTypeId: dto.eventTypeId ?? null,
@@ -60,7 +60,21 @@ export class InquiriesService {
           metadata: (dto.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
           source,
         },
+        include: {
+          eventType: { select: { id: true, name: true, slug: true } },
+          package: { select: { id: true, name: true, slug: true, basePricePoisha: true } },
+        },
       });
+      return {
+        ...created,
+        package: created.package
+          ? {
+              ...created.package,
+              basePricePoisha: toJsonPoisha(created.package.basePricePoisha),
+            }
+          : null,
+        activeQuote: null,
+      };
     });
   }
 
@@ -178,10 +192,11 @@ export class InquiriesService {
     ]);
 
     const serialized = items.map((inq) => {
-      const latestQuote = inq.quotes?.[0] ?? null;
+      const { quotes, ...restInq } = inq;
+      const latestQuote = quotes?.[0] ?? null;
       const latestVersion = latestQuote?.versions?.[0] ?? null;
       return {
-        ...inq,
+        ...restInq,
         package: inq.package
           ? {
               ...inq.package,
