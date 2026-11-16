@@ -15,6 +15,8 @@ import { toJsonPoisha, toPoisha } from '../../common/money/money.js';
 import {
   buildCloudinaryDeliveryUrls,
   createSignedUploadPayload,
+  destroyCloudinaryAsset,
+  getCloudinaryStatus,
   loadCloudinaryConfig,
   verifyUploadedAssetMetadata,
 } from '../../common/cloudinary/cloudinary.util.js';
@@ -879,7 +881,7 @@ export class CatalogService {
   }
 
   async removePortfolioMedia(eventId: string, mediaId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const deleted = await this.prisma.$transaction(async (tx) => {
       const event = await tx.portfolioEvent.findUnique({
         where: { id: eventId },
         select: { id: true, coverMediaId: true, status: true },
@@ -921,8 +923,17 @@ export class CatalogService {
         });
       }
 
-      return { deletedMediaId: mediaId };
+      return existing;
     });
+
+    // Best-effort cleanup in Cloudinary so deleted media does not remain orphaned
+    void destroyCloudinaryAsset(
+      loadCloudinaryConfig(),
+      deleted.publicId,
+      deleted.resourceType as 'IMAGE' | 'VIDEO',
+    );
+
+    return { deletedMediaId: mediaId };
   }
 
   async publishPortfolioEvent(eventId: string) {
@@ -1088,5 +1099,105 @@ export class CatalogService {
     }
 
     return this.serializePortfolioEvent(event);
+  }
+
+  // =========================================================================
+  // Direct Studio Media Gallery (Photo & Video Drag-and-Drop Library)
+  // =========================================================================
+
+  getGalleryStatus() {
+    return getCloudinaryStatus(loadCloudinaryConfig());
+  }
+
+  private async ensureDefaultGalleryEvent() {
+    const slug = 'studio-media-gallery';
+    const existing = await this.prisma.portfolioEvent.findUnique({
+      where: { slug },
+      select: { id: true, status: true },
+    });
+    if (existing) {
+      if (existing.status === PortfolioEventStatus.ARCHIVED) {
+        await this.prisma.portfolioEvent.update({
+          where: { id: existing.id },
+          data: { status: PortfolioEventStatus.DRAFT },
+        });
+      }
+      return existing.id;
+    }
+
+    try {
+      const created = await this.prisma.portfolioEvent.create({
+        data: {
+          title: 'Studio Media Gallery',
+          slug,
+          description: 'Uploaded studio photos and videos.',
+          status: PortfolioEventStatus.DRAFT,
+        },
+        select: { id: true },
+      });
+      return created.id;
+    } catch {
+      const concurrent = await this.prisma.portfolioEvent.findUnique({
+        where: { slug },
+        select: { id: true },
+      });
+      if (!concurrent) {
+        throw new ConflictException('Unable to initialize studio media gallery container.');
+      }
+      return concurrent.id;
+    }
+  }
+
+  async listGalleryMedia(resourceType?: PortfolioMediaType) {
+    const where: Prisma.PortfolioMediaWhereInput = resourceType ? { resourceType } : {};
+    const [items, photoCount, videoCount] = await Promise.all([
+      this.prisma.portfolioMedia.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { displayOrder: 'asc' }],
+      }),
+      this.prisma.portfolioMedia.count({ where: { resourceType: PortfolioMediaType.IMAGE } }),
+      this.prisma.portfolioMedia.count({ where: { resourceType: PortfolioMediaType.VIDEO } }),
+    ]);
+
+    return {
+      data: items.map((m) => this.serializePortfolioMedia(m)),
+      counts: {
+        total: photoCount + videoCount,
+        photos: photoCount,
+        videos: videoCount,
+      },
+    };
+  }
+
+  async signGalleryUpload(dto: SignPortfolioUploadDto) {
+    const galleryEventId = await this.ensureDefaultGalleryEvent();
+    return this.signPortfolioUpload(galleryEventId, dto);
+  }
+
+  async registerGalleryMedia(dto: RegisterPortfolioMediaDto) {
+    const galleryEventId = await this.ensureDefaultGalleryEvent();
+    return this.registerPortfolioMedia(galleryEventId, dto);
+  }
+
+  async updateGalleryMedia(mediaId: string, dto: UpdatePortfolioMediaDto) {
+    const media = await this.prisma.portfolioMedia.findUnique({
+      where: { id: mediaId },
+      select: { id: true, eventId: true },
+    });
+    if (!media) {
+      throw new NotFoundException('Gallery media item not found');
+    }
+    return this.updatePortfolioMedia(media.eventId, media.id, dto);
+  }
+
+  async deleteGalleryMedia(mediaId: string) {
+    const media = await this.prisma.portfolioMedia.findUnique({
+      where: { id: mediaId },
+      select: { id: true, eventId: true },
+    });
+    if (!media) {
+      throw new NotFoundException('Gallery media item not found');
+    }
+    return this.removePortfolioMedia(media.eventId, media.id);
   }
 }

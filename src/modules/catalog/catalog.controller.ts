@@ -215,4 +215,45 @@ export class CatalogController {
   archivePortfolioEvent(@Param('id') id: string) {
     return this.catalogService.archivePortfolioEvent(id);
   }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Get('gallery/status')
+  getGalleryStatus() {
+    return this.catalogService.getGalleryStatus();
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Get('gallery')
+  listGalleryMedia(@Query('resourceType') resourceType?: 'IMAGE' | 'VIDEO') {
+    const validType =
+      resourceType === 'IMAGE' || resourceType === 'VIDEO' ? resourceType : undefined;
+    return this.catalogService.listGalleryMedia(validType);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('gallery/sign-upload')
+  signGalleryUpload(@Body() dto: SignPortfolioUploadDto) {
+    return this.catalogService.signGalleryUpload(dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('gallery/register')
+  registerGalleryMedia(@Body() dto: RegisterPortfolioMediaDto) {
+    return this.catalogService.registerGalleryMedia(dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Patch('gallery/:mediaId')
+  updateGalleryMedia(
+    @Param('mediaId') mediaId: string,
+    @Body() dto: UpdatePortfolioMediaDto,
+  ) {
+    return this.catalogService.updateGalleryMedia(mediaId, dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Delete('gallery/:mediaId')
+  deleteGalleryMedia(@Param('mediaId') mediaId: string) {
+    return this.catalogService.deleteGalleryMedia(mediaId);
+  }
 }

@@ -90,6 +90,86 @@ export function assertCloudinaryCredentials(config: CloudinaryConfig): void {
   }
 }
 
+export interface CloudinaryStatusSummary {
+  configured: boolean;
+  missingVariables: string[];
+  cloudName: string | null;
+  folderPrefix: string;
+  allowedImageFormats: string[];
+  allowedVideoFormats: string[];
+  maxImageBytes: number;
+  maxVideoBytes: number;
+}
+
+/**
+ * Returns non-secret Cloudinary configuration status so the admin UI can show
+ * clear setup guidance if credentials are still placeholders.
+ */
+export function getCloudinaryStatus(config: CloudinaryConfig): CloudinaryStatusSummary {
+  const missingVariables: string[] = [];
+  if (isMissingOrPlaceholder(config.cloudName)) missingVariables.push('CLOUDINARY_CLOUD_NAME');
+  if (isMissingOrPlaceholder(config.apiKey)) missingVariables.push('CLOUDINARY_API_KEY');
+  if (isMissingOrPlaceholder(config.apiSecret)) missingVariables.push('CLOUDINARY_API_SECRET');
+
+  return {
+    configured: missingVariables.length === 0,
+    missingVariables,
+    cloudName: isMissingOrPlaceholder(config.cloudName) ? null : config.cloudName,
+    folderPrefix: config.folderPrefix,
+    allowedImageFormats: config.allowedImageFormats,
+    allowedVideoFormats: config.allowedVideoFormats,
+    maxImageBytes: config.maxImageBytes,
+    maxVideoBytes: config.maxVideoBytes,
+  };
+}
+
+/**
+ * Best-effort signed Cloudinary destroy API call so deleted gallery assets
+ * are also cleaned up from Cloudinary storage.
+ */
+export async function destroyCloudinaryAsset(
+  config: CloudinaryConfig,
+  publicId: string,
+  resourceType: PortfolioResourceKind,
+): Promise<boolean> {
+  if (
+    isMissingOrPlaceholder(config.cloudName) ||
+    isMissingOrPlaceholder(config.apiKey) ||
+    isMissingOrPlaceholder(config.apiSecret) ||
+    !publicId
+  ) {
+    return false;
+  }
+
+  try {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = computeCloudinarySignature(
+      { invalidate: 'true', public_id: publicId, timestamp },
+      config.apiSecret,
+    );
+    const endpointResource = resourceType === 'VIDEO' ? 'video' : 'image';
+    const body = new URLSearchParams({
+      public_id: publicId,
+      api_key: config.apiKey,
+      timestamp: String(timestamp),
+      invalidate: 'true',
+      signature,
+    });
+
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/${endpointResource}/destroy`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Generates Cloudinary SHA-1 signature for signed upload parameters.
  * Keys are sorted alphabetically; `file`, `cloud_name`, `resource_type`, and `api_key` are excluded per Cloudinary spec.
