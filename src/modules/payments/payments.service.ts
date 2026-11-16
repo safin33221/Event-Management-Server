@@ -10,6 +10,7 @@ import {
   AdvancePolicyType,
   BookingStatus,
   PaymentEntry,
+  PaymentMethod,
   PaymentType,
   Prisma,
   VerificationState,
@@ -24,7 +25,13 @@ import {
   toPoisha,
 } from '../../common/money/money.js';
 import {
+  getUtcRangeForLocalDateRange,
+  localDateStartToUtc,
+  toAgencyLocalDate,
+} from '../../common/time/timezone.js';
+import {
   CreateAdjustmentDto,
+  FinancialReportQueryDto,
   IssueRefundDto,
   RecordPaymentDto,
 } from './dto/payments.dto.js';
@@ -626,6 +633,434 @@ export class PaymentsService {
     return {
       count: entries.length,
       entries: entries.map((e) => this.serializeEntry(e)),
+    };
+  }
+
+  async getFinancialReport(query: FinancialReportQueryDto = {}) {
+    const studio = await this.prisma.studioSettings.findUnique({
+      where: { id: 'default' },
+      select: {
+        currency: true,
+        timezone: true,
+        advancePolicyType: true,
+        advancePolicyValue: true,
+      },
+    });
+
+    const currency = studio?.currency || 'BDT';
+    const timezone = studio?.timezone || 'Asia/Dhaka';
+    const defaultPolicyType = studio?.advancePolicyType ?? AdvancePolicyType.PERCENTAGE;
+    const defaultPolicyValue = studio?.advancePolicyValue ?? 20n;
+
+    let startFilter: Date | undefined;
+    let endFilter: Date | undefined;
+    if (query.from && query.to) {
+      const range = getUtcRangeForLocalDateRange(query.from, query.to, timezone);
+      startFilter = range.startUtc;
+      endFilter = range.endUtcExclusive;
+    } else if (query.from) {
+      startFilter = localDateStartToUtc(query.from, timezone);
+    } else if (query.to) {
+      endFilter = getUtcRangeForLocalDateRange(query.to, query.to, timezone).endUtcExclusive;
+    }
+
+    const bookingWhere: Prisma.BookingWhereInput = {
+      ...(query.bookingStatus ? { status: query.bookingStatus } : {}),
+      ...(startFilter || endFilter
+        ? {
+            createdAt: {
+              ...(startFilter ? { gte: startFilter } : {}),
+              ...(endFilter ? { lt: endFilter } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const paymentWhere: Prisma.PaymentEntryWhereInput = {
+      ...(query.method ? { method: query.method } : {}),
+      ...(query.bookingStatus ? { booking: { status: query.bookingStatus } } : {}),
+      ...(startFilter || endFilter
+        ? {
+            createdAt: {
+              ...(startFilter ? { gte: startFilter } : {}),
+              ...(endFilter ? { lt: endFilter } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const [bookings, paymentEntries] = await Promise.all([
+      this.prisma.booking.findMany({
+        where: bookingWhere,
+        include: {
+          eventType: { select: { id: true, name: true, slug: true } },
+          paymentEntries: true,
+          priceAdjustments: {
+            where: { status: AdjustmentStatus.APPROVED },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      }),
+      this.prisma.paymentEntry.findMany({
+        where: paymentWhere,
+        include: {
+          booking: {
+            select: {
+              id: true,
+              reference: true,
+              eventTitle: true,
+              clientName: true,
+              clientPhone: true,
+              status: true,
+            },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        take: 300,
+      }),
+    ]);
+
+    // 1. Compute per-booking financial statement & receivables
+    let totalContractedPoisha = 0n;
+    let totalEffectiveContractedPoisha = 0n;
+    let totalCreditNotesPoisha = 0n;
+    let totalChargeAdjustmentsPoisha = 0n;
+    let totalOutstandingDuePoisha = 0n;
+    let totalCustomerCreditPoisha = 0n;
+
+    let activeBookingsCount = 0;
+    let completedBookingsCount = 0;
+    let cancelledBookingsCount = 0;
+    let fullyPaidBookingsCount = 0;
+    let bookingsWithDueCount = 0;
+
+    const eventTypeAggMap = new Map<
+      string,
+      {
+        eventTypeId: string;
+        eventTypeName: string;
+        bookingsCount: number;
+        agreedTotalPoisha: bigint;
+        collectedPoisha: bigint;
+        outstandingDuePoisha: bigint;
+      }
+    >();
+
+    const monthlyMap = new Map<
+      string,
+      {
+        month: string;
+        bookingsCount: number;
+        contractedPoisha: bigint;
+        collectedPoisha: bigint;
+        refundedPoisha: bigint;
+      }
+    >();
+
+    const ensureMonthEntry = (monthKey: string) => {
+      let existing = monthlyMap.get(monthKey);
+      if (!existing) {
+        existing = {
+          month: monthKey,
+          bookingsCount: 0,
+          contractedPoisha: 0n,
+          collectedPoisha: 0n,
+          refundedPoisha: 0n,
+        };
+        monthlyMap.set(monthKey, existing);
+      }
+      return existing;
+    };
+
+    const receivables = bookings.map((b) => {
+      const verifiedReceipts = sumPoisha(
+        b.paymentEntries
+          .filter(
+            (e) =>
+              e.type === PaymentType.RECEIPT &&
+              e.verificationState === VerificationState.VERIFIED &&
+              (!query.method || e.method === query.method),
+          )
+          .map((e) => e.amountPoisha),
+      );
+      const pendingReceipts = sumPoisha(
+        b.paymentEntries
+          .filter(
+            (e) =>
+              e.type === PaymentType.RECEIPT &&
+              e.verificationState === VerificationState.PENDING &&
+              (!query.method || e.method === query.method),
+          )
+          .map((e) => e.amountPoisha),
+      );
+      const completedRefunds = sumPoisha(
+        b.paymentEntries
+          .filter(
+            (e) =>
+              e.type === PaymentType.REFUND &&
+              e.verificationState === VerificationState.VERIFIED &&
+              (!query.method || e.method === query.method),
+          )
+          .map((e) => e.amountPoisha),
+      );
+      const creditNotes = sumPoisha(
+        b.priceAdjustments
+          .filter((a) => a.type === AdjustmentType.CREDIT_NOTE)
+          .map((a) => a.amountPoisha),
+      );
+      const chargeAdjustments = sumPoisha(
+        b.priceAdjustments
+          .filter((a) => a.type === AdjustmentType.CHARGE_ADJUSTMENT)
+          .map((a) => a.amountPoisha),
+      );
+      const reversals = sumPoisha(
+        b.priceAdjustments
+          .filter((a) => a.type === AdjustmentType.REVERSAL)
+          .map((a) => a.amountPoisha),
+      );
+
+      const effectiveChargeRaw =
+        b.agreedTotalPoisha - creditNotes + chargeAdjustments;
+      const effectiveAgreedCharge = effectiveChargeRaw > 0n ? effectiveChargeRaw : 0n;
+      const netPaid = verifiedReceipts - completedRefunds - reversals;
+
+      const isCancelled = b.status === BookingStatus.CANCELLED;
+      const rawBalance = isCancelled ? 0n : effectiveAgreedCharge - netPaid;
+      const outstandingDue = rawBalance > 0n ? rawBalance : 0n;
+      const customerCredit =
+        !isCancelled && rawBalance < 0n
+          ? -rawBalance
+          : isCancelled && netPaid > 0n
+            ? netPaid
+            : 0n;
+
+      const policyType = b.advancePolicyTypeOverride ?? defaultPolicyType;
+      const policyValue = b.advancePolicyValueOverride ?? defaultPolicyValue;
+      const requiredAdvance = computeRequiredAdvancePoisha(
+        effectiveAgreedCharge,
+        policyType,
+        policyValue,
+      );
+
+      if (isCancelled) {
+        cancelledBookingsCount += 1;
+      } else {
+        activeBookingsCount += 1;
+        if (b.status === BookingStatus.COMPLETED) {
+          completedBookingsCount += 1;
+        }
+        totalContractedPoisha += b.agreedTotalPoisha;
+        totalEffectiveContractedPoisha += effectiveAgreedCharge;
+        totalCreditNotesPoisha += creditNotes;
+        totalChargeAdjustmentsPoisha += chargeAdjustments;
+        totalOutstandingDuePoisha += outstandingDue;
+        totalCustomerCreditPoisha += customerCredit;
+
+        if (outstandingDue === 0n) {
+          fullyPaidBookingsCount += 1;
+        } else {
+          bookingsWithDueCount += 1;
+        }
+
+        const etId = b.eventType?.id ?? 'uncategorized';
+        const etName = b.eventType?.name ?? 'General / Custom Event';
+        const etBucket = eventTypeAggMap.get(etId) ?? {
+          eventTypeId: etId,
+          eventTypeName: etName,
+          bookingsCount: 0,
+          agreedTotalPoisha: 0n,
+          collectedPoisha: 0n,
+          outstandingDuePoisha: 0n,
+        };
+        etBucket.bookingsCount += 1;
+        etBucket.agreedTotalPoisha += effectiveAgreedCharge;
+        etBucket.collectedPoisha += netPaid > 0n ? netPaid : 0n;
+        etBucket.outstandingDuePoisha += outstandingDue;
+        eventTypeAggMap.set(etId, etBucket);
+
+        const localDateStr = toAgencyLocalDate(b.createdAt, timezone);
+        const monthBucket = ensureMonthEntry(localDateStr.slice(0, 7));
+        monthBucket.bookingsCount += 1;
+        monthBucket.contractedPoisha += effectiveAgreedCharge;
+      }
+
+      return {
+        bookingId: b.id,
+        reference: b.reference,
+        eventTitle: b.eventTitle,
+        eventTypeName: b.eventType?.name ?? null,
+        clientName: b.clientName,
+        clientPhone: b.clientPhone,
+        eventDate: b.eventDate,
+        status: b.status,
+        createdAt: b.createdAt,
+        agreedTotalPoisha: toJsonPoisha(b.agreedTotalPoisha),
+        effectiveAgreedChargePoisha: toJsonPoisha(effectiveAgreedCharge),
+        verifiedReceiptsPoisha: toJsonPoisha(verifiedReceipts),
+        pendingReceiptsPoisha: toJsonPoisha(pendingReceipts),
+        completedRefundsPoisha: toJsonPoisha(completedRefunds),
+        creditNotesPoisha: toJsonPoisha(creditNotes),
+        outstandingDuePoisha: toJsonPoisha(outstandingDue),
+        customerCreditPoisha: toJsonPoisha(customerCredit),
+        requiredAdvancePoisha: toJsonPoisha(requiredAdvance),
+        isAdvanceMet: verifiedReceipts >= requiredAdvance,
+      };
+    });
+
+    // 2. Aggregate payment entries by method & month
+    const allMethods: PaymentMethod[] = [
+      PaymentMethod.BKASH,
+      PaymentMethod.NAGAD,
+      PaymentMethod.BANK,
+      PaymentMethod.CASH,
+      PaymentMethod.OTHER,
+    ];
+
+    const methodMap = new Map<
+      PaymentMethod,
+      {
+        method: PaymentMethod;
+        verifiedReceiptsPoisha: bigint;
+        pendingReceiptsPoisha: bigint;
+        refundsPoisha: bigint;
+        transactionCount: number;
+      }
+    >();
+    for (const m of allMethods) {
+      methodMap.set(m, {
+        method: m,
+        verifiedReceiptsPoisha: 0n,
+        pendingReceiptsPoisha: 0n,
+        refundsPoisha: 0n,
+        transactionCount: 0,
+      });
+    }
+
+    let totalVerifiedReceiptsPoisha = 0n;
+    let totalPendingReceiptsPoisha = 0n;
+    let totalCompletedRefundsPoisha = 0n;
+    let pendingReceiptsCount = 0;
+
+    for (const entry of paymentEntries) {
+      const bucket = methodMap.get(entry.method)!;
+      const monthKey = toAgencyLocalDate(entry.createdAt, timezone).slice(0, 7);
+      const monthBucket = ensureMonthEntry(monthKey);
+
+      if (entry.type === PaymentType.RECEIPT) {
+        if (entry.verificationState === VerificationState.VERIFIED) {
+          bucket.verifiedReceiptsPoisha += entry.amountPoisha;
+          bucket.transactionCount += 1;
+          totalVerifiedReceiptsPoisha += entry.amountPoisha;
+          monthBucket.collectedPoisha += entry.amountPoisha;
+        } else if (entry.verificationState === VerificationState.PENDING) {
+          bucket.pendingReceiptsPoisha += entry.amountPoisha;
+          bucket.transactionCount += 1;
+          totalPendingReceiptsPoisha += entry.amountPoisha;
+          pendingReceiptsCount += 1;
+        }
+      } else if (
+        entry.type === PaymentType.REFUND &&
+        entry.verificationState === VerificationState.VERIFIED
+      ) {
+        bucket.refundsPoisha += entry.amountPoisha;
+        bucket.transactionCount += 1;
+        totalCompletedRefundsPoisha += entry.amountPoisha;
+        monthBucket.refundedPoisha += entry.amountPoisha;
+      }
+    }
+
+    const netCollectedRevenuePoisha =
+      totalVerifiedReceiptsPoisha - totalCompletedRefundsPoisha;
+
+    const collectionRatePercent =
+      totalEffectiveContractedPoisha > 0n
+        ? Math.min(
+            100,
+            Math.max(
+              0,
+              Number((netCollectedRevenuePoisha * 1000n) / totalEffectiveContractedPoisha) / 10,
+            ),
+          )
+        : 0;
+
+    const byMethod = Array.from(methodMap.values()).map((b) => {
+      const netMethod = b.verifiedReceiptsPoisha - b.refundsPoisha;
+      const sharePercent =
+        totalVerifiedReceiptsPoisha > 0n
+          ? Number((b.verifiedReceiptsPoisha * 1000n) / totalVerifiedReceiptsPoisha) / 10
+          : 0;
+      return {
+        method: b.method,
+        verifiedReceiptsPoisha: toJsonPoisha(b.verifiedReceiptsPoisha),
+        pendingReceiptsPoisha: toJsonPoisha(b.pendingReceiptsPoisha),
+        refundsPoisha: toJsonPoisha(b.refundsPoisha),
+        netCollectedPoisha: toJsonPoisha(netMethod),
+        transactionCount: b.transactionCount,
+        sharePercent,
+      };
+    });
+
+    const byMonth = Array.from(monthlyMap.values())
+      .sort((a, b) => b.month.localeCompare(a.month))
+      .map((m) => ({
+        month: m.month,
+        bookingsCount: m.bookingsCount,
+        contractedPoisha: toJsonPoisha(m.contractedPoisha),
+        collectedPoisha: toJsonPoisha(m.collectedPoisha),
+        refundedPoisha: toJsonPoisha(m.refundedPoisha),
+        netCollectedPoisha: toJsonPoisha(m.collectedPoisha - m.refundedPoisha),
+      }));
+
+    const byEventType = Array.from(eventTypeAggMap.values())
+      .sort((a, b) => Number(b.agreedTotalPoisha - a.agreedTotalPoisha))
+      .map((et) => ({
+        eventTypeId: et.eventTypeId,
+        eventTypeName: et.eventTypeName,
+        bookingsCount: et.bookingsCount,
+        agreedTotalPoisha: toJsonPoisha(et.agreedTotalPoisha),
+        collectedPoisha: toJsonPoisha(et.collectedPoisha),
+        outstandingDuePoisha: toJsonPoisha(et.outstandingDuePoisha),
+      }));
+
+    const transactions = paymentEntries.slice(0, 100).map((e) => ({
+      ...this.serializeEntry(e),
+      booking: e.booking,
+    }));
+
+    return {
+      currency,
+      timezone,
+      generatedAt: new Date().toISOString(),
+      filters: {
+        from: query.from ?? null,
+        to: query.to ?? null,
+        method: query.method ?? null,
+        bookingStatus: query.bookingStatus ?? null,
+      },
+      summary: {
+        totalContractedPoisha: toJsonPoisha(totalContractedPoisha),
+        effectiveContractedPoisha: toJsonPoisha(totalEffectiveContractedPoisha),
+        verifiedReceiptsPoisha: toJsonPoisha(totalVerifiedReceiptsPoisha),
+        pendingVerificationPoisha: toJsonPoisha(totalPendingReceiptsPoisha),
+        completedRefundsPoisha: toJsonPoisha(totalCompletedRefundsPoisha),
+        netCollectedRevenuePoisha: toJsonPoisha(netCollectedRevenuePoisha),
+        totalCreditNotesPoisha: toJsonPoisha(totalCreditNotesPoisha),
+        totalChargeAdjustmentsPoisha: toJsonPoisha(totalChargeAdjustmentsPoisha),
+        totalOutstandingDuePoisha: toJsonPoisha(totalOutstandingDuePoisha),
+        totalCustomerCreditPoisha: toJsonPoisha(totalCustomerCreditPoisha),
+        collectionRatePercent,
+        activeBookingsCount,
+        completedBookingsCount,
+        cancelledBookingsCount,
+        fullyPaidBookingsCount,
+        bookingsWithDueCount,
+        pendingReceiptsCount,
+      },
+      byMethod,
+      byMonth,
+      byEventType,
+      receivables,
+      transactions,
     };
   }
 }

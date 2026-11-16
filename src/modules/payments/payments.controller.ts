@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common';
 import { UserRole } from '../../generated/prisma/client.js';
 import { CurrentActor, Roles } from '../../common/guards/auth.guard.js';
 import type { RequestActor } from '../../common/guards/auth.guard.js';
 import { PaymentsService } from './payments.service.js';
 import {
   CreateAdjustmentDto,
+  FinancialReportQueryDto,
   IssueRefundDto,
   RecordPaymentDto,
   RejectPaymentDto,
@@ -73,5 +74,11 @@ export class PaymentsController {
   @Get('finance/export')
   exportLedger() {
     return this.paymentsService.exportLedger();
+  }
+
+  @Roles(UserRole.OWNER, UserRole.ACCOUNTANT)
+  @Get('finance/report')
+  getFinancialReport(@Query() query: FinancialReportQueryDto) {
+    return this.paymentsService.getFinancialReport(query);
   }
 }

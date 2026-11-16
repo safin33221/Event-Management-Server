@@ -1,5 +1,17 @@
-import { AdjustmentType, PaymentMethod } from '../../../generated/prisma/client.js';
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import {
+  AdjustmentType,
+  BookingStatus,
+  PaymentMethod,
+} from '../../../generated/prisma/client.js';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Min,
+} from 'class-validator';
 
 export class RecordPaymentDto {
   @IsInt()
@@ -70,3 +82,26 @@ export class CreateAdjustmentDto {
   @IsUUID()
   relatedPaymentId?: string;
 }
+
+export class FinancialReportQueryDto {
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'from must be a valid YYYY-MM-DD date string',
+  })
+  from?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'to must be a valid YYYY-MM-DD date string',
+  })
+  to?: string;
+
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  method?: PaymentMethod;
+
+  @IsOptional()
+  @IsEnum(BookingStatus)
+  bookingStatus?: BookingStatus;
+}
+
