@@ -1169,6 +1169,41 @@ export class CatalogService {
     };
   }
 
+  async listPublicGalleryMedia(resourceType?: PortfolioMediaType) {
+    const baseWhere: Prisma.PortfolioMediaWhereInput = {
+      status: PortfolioMediaStatus.READY,
+      event: {
+        status: { not: PortfolioEventStatus.ARCHIVED },
+      },
+    };
+    const where: Prisma.PortfolioMediaWhereInput = resourceType
+      ? { ...baseWhere, resourceType }
+      : baseWhere;
+
+    const [items, photoCount, videoCount] = await Promise.all([
+      this.prisma.portfolioMedia.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { displayOrder: 'asc' }],
+        take: 60,
+      }),
+      this.prisma.portfolioMedia.count({
+        where: { ...baseWhere, resourceType: PortfolioMediaType.IMAGE },
+      }),
+      this.prisma.portfolioMedia.count({
+        where: { ...baseWhere, resourceType: PortfolioMediaType.VIDEO },
+      }),
+    ]);
+
+    return {
+      data: items.map((m) => this.serializePortfolioMedia(m)),
+      counts: {
+        total: photoCount + videoCount,
+        photos: photoCount,
+        videos: videoCount,
+      },
+    };
+  }
+
   async signGalleryUpload(dto: SignPortfolioUploadDto) {
     const galleryEventId = await this.ensureDefaultGalleryEvent();
     return this.signPortfolioUpload(galleryEventId, dto);

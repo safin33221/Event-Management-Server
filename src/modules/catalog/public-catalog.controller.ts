@@ -32,4 +32,11 @@ export class PublicCatalogController {
   getPublicPortfolioEventBySlug(@Param('slug') slug: string) {
     return this.catalogService.getPublicPortfolioEventBySlug(slug);
   }
+
+  @Get('gallery')
+  listPublicGalleryMedia(@Query('resourceType') resourceType?: 'IMAGE' | 'VIDEO') {
+    const validType =
+      resourceType === 'IMAGE' || resourceType === 'VIDEO' ? resourceType : undefined;
+    return this.catalogService.listPublicGalleryMedia(validType);
+  }
 }
