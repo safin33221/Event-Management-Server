@@ -59,6 +59,8 @@ export const ModelName = {
   Package: 'Package',
   PackageItem: 'PackageItem',
   PortfolioItem: 'PortfolioItem',
+  PortfolioEvent: 'PortfolioEvent',
+  PortfolioMedia: 'PortfolioMedia',
   TaskTemplate: 'TaskTemplate',
   DeliverableLabel: 'DeliverableLabel',
   Inquiry: 'Inquiry',
@@ -203,6 +205,49 @@ export const PortfolioItemScalarFieldEnum = {
 } as const
 
 export type PortfolioItemScalarFieldEnum = (typeof PortfolioItemScalarFieldEnum)[keyof typeof PortfolioItemScalarFieldEnum]
+
+
+export const PortfolioEventScalarFieldEnum = {
+  id: 'id',
+  eventTypeId: 'eventTypeId',
+  title: 'title',
+  slug: 'slug',
+  eventDate: 'eventDate',
+  description: 'description',
+  location: 'location',
+  status: 'status',
+  coverMediaId: 'coverMediaId',
+  sortOrder: 'sortOrder',
+  publishedAt: 'publishedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PortfolioEventScalarFieldEnum = (typeof PortfolioEventScalarFieldEnum)[keyof typeof PortfolioEventScalarFieldEnum]
+
+
+export const PortfolioMediaScalarFieldEnum = {
+  id: 'id',
+  eventId: 'eventId',
+  assetId: 'assetId',
+  publicId: 'publicId',
+  resourceType: 'resourceType',
+  format: 'format',
+  secureUrl: 'secureUrl',
+  bytes: 'bytes',
+  width: 'width',
+  height: 'height',
+  durationSeconds: 'durationSeconds',
+  caption: 'caption',
+  altText: 'altText',
+  displayOrder: 'displayOrder',
+  status: 'status',
+  errorMessage: 'errorMessage',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PortfolioMediaScalarFieldEnum = (typeof PortfolioMediaScalarFieldEnum)[keyof typeof PortfolioMediaScalarFieldEnum]
 
 
 export const TaskTemplateScalarFieldEnum = {

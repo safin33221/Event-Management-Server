@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { Public } from '../../common/guards/auth.guard.js';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto.js';
 import { CatalogService } from './catalog.service.js';
@@ -21,5 +21,15 @@ export class PublicCatalogController {
   @Get('portfolio')
   listPublicPortfolio(@Query() query: PaginationQueryDto) {
     return this.catalogService.listPublicPortfolio(query);
+  }
+
+  @Get('portfolio/events')
+  listPublicPortfolioEvents(@Query() query: PaginationQueryDto) {
+    return this.catalogService.listPublicPortfolioEvents(query);
+  }
+
+  @Get('portfolio/events/:slug')
+  getPublicPortfolioEventBySlug(@Param('slug') slug: string) {
+    return this.catalogService.getPublicPortfolioEventBySlug(slug);
   }
 }

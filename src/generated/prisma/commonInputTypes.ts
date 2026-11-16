@@ -327,11 +327,11 @@ export type DateTimeNullableFilter<$PrismaModel = never> = {
   not?: Prisma.NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
 }
 
-export type EnumInquiryStatusFilter<$PrismaModel = never> = {
-  equals?: $Enums.InquiryStatus | Prisma.EnumInquiryStatusFieldRefInput<$PrismaModel>
-  in?: $Enums.InquiryStatus[] | Prisma.ListEnumInquiryStatusFieldRefInput<$PrismaModel>
-  notIn?: $Enums.InquiryStatus[] | Prisma.ListEnumInquiryStatusFieldRefInput<$PrismaModel>
-  not?: Prisma.NestedEnumInquiryStatusFilter<$PrismaModel> | $Enums.InquiryStatus
+export type EnumPortfolioEventStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioEventStatus | Prisma.EnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioEventStatus[] | Prisma.ListEnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioEventStatus[] | Prisma.ListEnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioEventStatusFilter<$PrismaModel> | $Enums.PortfolioEventStatus
 }
 
 export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -346,6 +346,111 @@ export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
   _min?: Prisma.NestedDateTimeNullableFilter<$PrismaModel>
   _max?: Prisma.NestedDateTimeNullableFilter<$PrismaModel>
+}
+
+export type EnumPortfolioEventStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioEventStatus | Prisma.EnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioEventStatus[] | Prisma.ListEnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioEventStatus[] | Prisma.ListEnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioEventStatusWithAggregatesFilter<$PrismaModel> | $Enums.PortfolioEventStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPortfolioEventStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPortfolioEventStatusFilter<$PrismaModel>
+}
+
+export type EnumPortfolioMediaTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioMediaType | Prisma.EnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioMediaType[] | Prisma.ListEnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioMediaType[] | Prisma.ListEnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioMediaTypeFilter<$PrismaModel> | $Enums.PortfolioMediaType
+}
+
+export type IntNullableFilter<$PrismaModel = never> = {
+  equals?: number | Prisma.IntFieldRefInput<$PrismaModel> | null
+  in?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel> | null
+  notIn?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel> | null
+  lt?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  lte?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  gt?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  gte?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedIntNullableFilter<$PrismaModel> | number | null
+}
+
+export type FloatNullableFilter<$PrismaModel = never> = {
+  equals?: number | Prisma.FloatFieldRefInput<$PrismaModel> | null
+  in?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
+  notIn?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
+  lt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  lte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  gt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  gte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedFloatNullableFilter<$PrismaModel> | number | null
+}
+
+export type EnumPortfolioMediaStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioMediaStatus | Prisma.EnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioMediaStatus[] | Prisma.ListEnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioMediaStatus[] | Prisma.ListEnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioMediaStatusFilter<$PrismaModel> | $Enums.PortfolioMediaStatus
+}
+
+export type EnumPortfolioMediaTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioMediaType | Prisma.EnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioMediaType[] | Prisma.ListEnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioMediaType[] | Prisma.ListEnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioMediaTypeWithAggregatesFilter<$PrismaModel> | $Enums.PortfolioMediaType
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPortfolioMediaTypeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPortfolioMediaTypeFilter<$PrismaModel>
+}
+
+export type IntNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: number | Prisma.IntFieldRefInput<$PrismaModel> | null
+  in?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel> | null
+  notIn?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel> | null
+  lt?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  lte?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  gt?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  gte?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedIntNullableWithAggregatesFilter<$PrismaModel> | number | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _avg?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+  _sum?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedIntNullableFilter<$PrismaModel>
+}
+
+export type FloatNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: number | Prisma.FloatFieldRefInput<$PrismaModel> | null
+  in?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
+  notIn?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
+  lt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  lte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  gt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  gte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedFloatNullableWithAggregatesFilter<$PrismaModel> | number | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _avg?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+  _sum?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+}
+
+export type EnumPortfolioMediaStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioMediaStatus | Prisma.EnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioMediaStatus[] | Prisma.ListEnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioMediaStatus[] | Prisma.ListEnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioMediaStatusWithAggregatesFilter<$PrismaModel> | $Enums.PortfolioMediaStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPortfolioMediaStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPortfolioMediaStatusFilter<$PrismaModel>
+}
+
+export type EnumInquiryStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.InquiryStatus | Prisma.EnumInquiryStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.InquiryStatus[] | Prisma.ListEnumInquiryStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.InquiryStatus[] | Prisma.ListEnumInquiryStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumInquiryStatusFilter<$PrismaModel> | $Enums.InquiryStatus
 }
 
 export type EnumInquiryStatusWithAggregatesFilter<$PrismaModel = never> = {
@@ -935,11 +1040,11 @@ export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
   not?: Prisma.NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
 }
 
-export type NestedEnumInquiryStatusFilter<$PrismaModel = never> = {
-  equals?: $Enums.InquiryStatus | Prisma.EnumInquiryStatusFieldRefInput<$PrismaModel>
-  in?: $Enums.InquiryStatus[] | Prisma.ListEnumInquiryStatusFieldRefInput<$PrismaModel>
-  notIn?: $Enums.InquiryStatus[] | Prisma.ListEnumInquiryStatusFieldRefInput<$PrismaModel>
-  not?: Prisma.NestedEnumInquiryStatusFilter<$PrismaModel> | $Enums.InquiryStatus
+export type NestedEnumPortfolioEventStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioEventStatus | Prisma.EnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioEventStatus[] | Prisma.ListEnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioEventStatus[] | Prisma.ListEnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioEventStatusFilter<$PrismaModel> | $Enums.PortfolioEventStatus
 }
 
 export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -954,6 +1059,100 @@ export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
   _min?: Prisma.NestedDateTimeNullableFilter<$PrismaModel>
   _max?: Prisma.NestedDateTimeNullableFilter<$PrismaModel>
+}
+
+export type NestedEnumPortfolioEventStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioEventStatus | Prisma.EnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioEventStatus[] | Prisma.ListEnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioEventStatus[] | Prisma.ListEnumPortfolioEventStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioEventStatusWithAggregatesFilter<$PrismaModel> | $Enums.PortfolioEventStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPortfolioEventStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPortfolioEventStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumPortfolioMediaTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioMediaType | Prisma.EnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioMediaType[] | Prisma.ListEnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioMediaType[] | Prisma.ListEnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioMediaTypeFilter<$PrismaModel> | $Enums.PortfolioMediaType
+}
+
+export type NestedFloatNullableFilter<$PrismaModel = never> = {
+  equals?: number | Prisma.FloatFieldRefInput<$PrismaModel> | null
+  in?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
+  notIn?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
+  lt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  lte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  gt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  gte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedFloatNullableFilter<$PrismaModel> | number | null
+}
+
+export type NestedEnumPortfolioMediaStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioMediaStatus | Prisma.EnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioMediaStatus[] | Prisma.ListEnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioMediaStatus[] | Prisma.ListEnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioMediaStatusFilter<$PrismaModel> | $Enums.PortfolioMediaStatus
+}
+
+export type NestedEnumPortfolioMediaTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioMediaType | Prisma.EnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioMediaType[] | Prisma.ListEnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioMediaType[] | Prisma.ListEnumPortfolioMediaTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioMediaTypeWithAggregatesFilter<$PrismaModel> | $Enums.PortfolioMediaType
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPortfolioMediaTypeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPortfolioMediaTypeFilter<$PrismaModel>
+}
+
+export type NestedIntNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: number | Prisma.IntFieldRefInput<$PrismaModel> | null
+  in?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel> | null
+  notIn?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel> | null
+  lt?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  lte?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  gt?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  gte?: number | Prisma.IntFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedIntNullableWithAggregatesFilter<$PrismaModel> | number | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _avg?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+  _sum?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedIntNullableFilter<$PrismaModel>
+}
+
+export type NestedFloatNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: number | Prisma.FloatFieldRefInput<$PrismaModel> | null
+  in?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
+  notIn?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
+  lt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  lte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  gt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  gte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedFloatNullableWithAggregatesFilter<$PrismaModel> | number | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _avg?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+  _sum?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+}
+
+export type NestedEnumPortfolioMediaStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PortfolioMediaStatus | Prisma.EnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.PortfolioMediaStatus[] | Prisma.ListEnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PortfolioMediaStatus[] | Prisma.ListEnumPortfolioMediaStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPortfolioMediaStatusWithAggregatesFilter<$PrismaModel> | $Enums.PortfolioMediaStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPortfolioMediaStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPortfolioMediaStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumInquiryStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.InquiryStatus | Prisma.EnumInquiryStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.InquiryStatus[] | Prisma.ListEnumInquiryStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.InquiryStatus[] | Prisma.ListEnumInquiryStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumInquiryStatusFilter<$PrismaModel> | $Enums.InquiryStatus
 }
 
 export type NestedEnumInquiryStatusWithAggregatesFilter<$PrismaModel = never> = {
@@ -1066,17 +1265,6 @@ export type NestedBigIntNullableWithAggregatesFilter<$PrismaModel = never> = {
   _sum?: Prisma.NestedBigIntNullableFilter<$PrismaModel>
   _min?: Prisma.NestedBigIntNullableFilter<$PrismaModel>
   _max?: Prisma.NestedBigIntNullableFilter<$PrismaModel>
-}
-
-export type NestedFloatNullableFilter<$PrismaModel = never> = {
-  equals?: number | Prisma.FloatFieldRefInput<$PrismaModel> | null
-  in?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
-  notIn?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
-  lt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
-  lte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
-  gt?: number | Prisma.FloatFieldRefInput<$PrismaModel>
-  gte?: number | Prisma.FloatFieldRefInput<$PrismaModel>
-  not?: Prisma.NestedFloatNullableFilter<$PrismaModel> | number | null
 }
 
 export type NestedEnumBookingStatusWithAggregatesFilter<$PrismaModel = never> = {

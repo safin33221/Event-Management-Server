@@ -1,17 +1,41 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  PortfolioEventStatus,
+  PortfolioMediaStatus,
+  PortfolioMediaType,
+  Prisma,
+} from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { toJsonPoisha, toPoisha } from '../../common/money/money.js';
+import {
+  buildCloudinaryDeliveryUrls,
+  createSignedUploadPayload,
+  loadCloudinaryConfig,
+  verifyUploadedAssetMetadata,
+} from '../../common/cloudinary/cloudinary.util.js';
 import { PaginationQueryDto, getPaginationParams } from '../../common/dto/pagination.dto.js';
 import {
   CreateDeliverableLabelDto,
   CreateEventTypeDto,
   CreatePackageDto,
+  CreatePortfolioEventDto,
   CreatePortfolioItemDto,
   CreateServiceItemDto,
   CreateTaskTemplateDto,
+  ListPortfolioEventsQueryDto,
+  RegisterPortfolioMediaDto,
+  ReorderPortfolioMediaDto,
+  SignPortfolioUploadDto,
   UpdateDeliverableLabelDto,
   UpdatePackageDto,
+  UpdatePortfolioEventDto,
   UpdatePortfolioItemDto,
+  UpdatePortfolioMediaDto,
   UpdateTaskTemplateDto,
 } from './dto/catalog.dto.js';
 
@@ -375,5 +399,694 @@ export class CatalogService {
       include: { eventType: { select: { id: true, name: true, slug: true } } },
       orderBy: { defaultOffsetDays: 'asc' },
     });
+  }
+
+  private serializePortfolioMedia(media: {
+    id: string;
+    eventId: string;
+    assetId: string;
+    publicId: string;
+    resourceType: PortfolioMediaType;
+    format: string;
+    secureUrl: string;
+    bytes: number;
+    width: number | null;
+    height: number | null;
+    durationSeconds: number | null;
+    caption: string | null;
+    altText: string | null;
+    displayOrder: number;
+    status: PortfolioMediaStatus;
+    errorMessage: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    const deliveryUrls = buildCloudinaryDeliveryUrls({
+      secureUrl: media.secureUrl,
+      publicId: media.publicId,
+      resourceType: media.resourceType,
+      format: media.format,
+    });
+    return {
+      ...media,
+      deliveryUrls,
+    };
+  }
+
+  private serializePortfolioEvent(event: {
+    id: string;
+    eventTypeId: string | null;
+    eventType?: { id: string; name: string; slug: string } | null;
+    title: string;
+    slug: string;
+    eventDate: Date | null;
+    description: string | null;
+    location: string | null;
+    status: PortfolioEventStatus;
+    coverMediaId: string | null;
+    sortOrder: number;
+    publishedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    coverMedia?: {
+      id: string;
+      eventId: string;
+      assetId: string;
+      publicId: string;
+      resourceType: PortfolioMediaType;
+      format: string;
+      secureUrl: string;
+      bytes: number;
+      width: number | null;
+      height: number | null;
+      durationSeconds: number | null;
+      caption: string | null;
+      altText: string | null;
+      displayOrder: number;
+      status: PortfolioMediaStatus;
+      errorMessage: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    } | null;
+    media?: Array<{
+      id: string;
+      eventId: string;
+      assetId: string;
+      publicId: string;
+      resourceType: PortfolioMediaType;
+      format: string;
+      secureUrl: string;
+      bytes: number;
+      width: number | null;
+      height: number | null;
+      durationSeconds: number | null;
+      caption: string | null;
+      altText: string | null;
+      displayOrder: number;
+      status: PortfolioMediaStatus;
+      errorMessage: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
+  }) {
+    const serializedMedia = (event.media ?? []).map((m) => this.serializePortfolioMedia(m));
+    const serializedCover = event.coverMedia
+      ? this.serializePortfolioMedia(event.coverMedia)
+      : serializedMedia.find(
+          (m) => m.id === event.coverMediaId && m.resourceType === PortfolioMediaType.IMAGE,
+        ) ?? null;
+
+    const photoCount = serializedMedia.filter(
+      (m) => m.resourceType === PortfolioMediaType.IMAGE && m.status === PortfolioMediaStatus.READY,
+    ).length;
+    const videoCount = serializedMedia.filter(
+      (m) => m.resourceType === PortfolioMediaType.VIDEO && m.status === PortfolioMediaStatus.READY,
+    ).length;
+
+    return {
+      ...event,
+      coverMedia: serializedCover,
+      media: serializedMedia,
+      counts: {
+        photos: photoCount,
+        videos: videoCount,
+        totalReady: photoCount + videoCount,
+      },
+    };
+  }
+
+  async createPortfolioEvent(dto: CreatePortfolioEventDto) {
+    await this.assertEventTypeExists(dto.eventTypeId);
+    const normalizedSlug = dto.slug.trim().toLowerCase();
+
+    const existingSlug = await this.prisma.portfolioEvent.findUnique({
+      where: { slug: normalizedSlug },
+      select: { id: true },
+    });
+    if (existingSlug) {
+      throw new ConflictException(`A portfolio showcase event with slug "${normalizedSlug}" already exists.`);
+    }
+
+    const created = await this.prisma.portfolioEvent.create({
+      data: {
+        title: dto.title.trim(),
+        slug: normalizedSlug,
+        eventDate: dto.eventDate ? new Date(`${dto.eventDate}T00:00:00.000Z`) : null,
+        description: dto.description?.trim() || null,
+        location: dto.location?.trim() || null,
+        eventTypeId: dto.eventTypeId ?? null,
+        status: PortfolioEventStatus.DRAFT,
+      },
+      include: {
+        eventType: { select: { id: true, name: true, slug: true } },
+        coverMedia: true,
+        media: { orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+
+    return this.serializePortfolioEvent(created);
+  }
+
+  async listAdminPortfolioEvents(query: ListPortfolioEventsQueryDto) {
+    const { page, limit, skip } = getPaginationParams(query);
+    const where: Prisma.PortfolioEventWhereInput = {
+      status: query.status,
+      eventTypeId: query.eventTypeId,
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.portfolioEvent.findMany({
+        where,
+        include: {
+          eventType: { select: { id: true, name: true, slug: true } },
+          coverMedia: true,
+          media: { orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] },
+        },
+        orderBy: [{ sortOrder: 'asc' }, { eventDate: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      this.prisma.portfolioEvent.count({ where }),
+    ]);
+
+    return {
+      data: items.map((ev) => this.serializePortfolioEvent(ev)),
+      meta: { page, limit, total },
+    };
+  }
+
+  async getAdminPortfolioEvent(eventId: string) {
+    const event = await this.prisma.portfolioEvent.findUnique({
+      where: { id: eventId },
+      include: {
+        eventType: { select: { id: true, name: true, slug: true } },
+        coverMedia: true,
+        media: { orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+    if (!event) {
+      throw new NotFoundException('Portfolio showcase event not found');
+    }
+    return this.serializePortfolioEvent(event);
+  }
+
+  async updatePortfolioEvent(eventId: string, dto: UpdatePortfolioEventDto) {
+    const existing = await this.prisma.portfolioEvent.findUnique({
+      where: { id: eventId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Portfolio showcase event not found');
+    }
+
+    if (dto.eventTypeId) {
+      await this.assertEventTypeExists(dto.eventTypeId);
+    }
+
+    let normalizedSlug: string | undefined;
+    if (dto.slug !== undefined) {
+      normalizedSlug = dto.slug.trim().toLowerCase();
+      if (normalizedSlug !== existing.slug) {
+        const duplicate = await this.prisma.portfolioEvent.findUnique({
+          where: { slug: normalizedSlug },
+          select: { id: true },
+        });
+        if (duplicate) {
+          throw new ConflictException(`Slug "${normalizedSlug}" is already in use by another showcase event.`);
+        }
+      }
+    }
+
+    if (dto.coverMediaId) {
+      const coverCandidate = await this.prisma.portfolioMedia.findFirst({
+        where: { id: dto.coverMediaId, eventId },
+      });
+      if (!coverCandidate) {
+        throw new BadRequestException('Selected cover media does not belong to this showcase event.');
+      }
+      if (coverCandidate.resourceType !== PortfolioMediaType.IMAGE) {
+        throw new BadRequestException('Cover media must be an image (videos cannot be used as the event cover image).');
+      }
+      if (coverCandidate.status !== PortfolioMediaStatus.READY) {
+        throw new BadRequestException('Cover image must finish processing (status READY) before it can be selected as cover.');
+      }
+    }
+
+    const updated = await this.prisma.portfolioEvent.update({
+      where: { id: eventId },
+      data: {
+        title: dto.title?.trim(),
+        slug: normalizedSlug,
+        eventDate:
+          dto.eventDate !== undefined
+            ? dto.eventDate
+              ? new Date(`${dto.eventDate}T00:00:00.000Z`)
+              : null
+            : undefined,
+        description: dto.description !== undefined ? dto.description.trim() || null : undefined,
+        location: dto.location !== undefined ? dto.location.trim() || null : undefined,
+        eventTypeId: dto.eventTypeId,
+        coverMediaId: dto.coverMediaId,
+        sortOrder: dto.sortOrder,
+      },
+      include: {
+        eventType: { select: { id: true, name: true, slug: true } },
+        coverMedia: true,
+        media: { orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+
+    return this.serializePortfolioEvent(updated);
+  }
+
+  async signPortfolioUpload(eventId: string, dto: SignPortfolioUploadDto) {
+    const event = await this.prisma.portfolioEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true, status: true },
+    });
+    if (!event) {
+      throw new NotFoundException('Portfolio showcase event not found');
+    }
+    if (event.status === PortfolioEventStatus.ARCHIVED) {
+      throw new ConflictException('Cannot upload media to an archived showcase event.');
+    }
+
+    const config = loadCloudinaryConfig();
+    return createSignedUploadPayload({
+      config,
+      eventId: event.id,
+      resourceType: dto.resourceType,
+      format: dto.format,
+      bytes: dto.bytes,
+    });
+  }
+
+  async registerPortfolioMedia(eventId: string, dto: RegisterPortfolioMediaDto) {
+    const event = await this.prisma.portfolioEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true, title: true, status: true, coverMediaId: true },
+    });
+    if (!event) {
+      throw new NotFoundException('Portfolio showcase event not found');
+    }
+    if (event.status === PortfolioEventStatus.ARCHIVED) {
+      throw new ConflictException('Cannot add media to an archived showcase event.');
+    }
+
+    const config = loadCloudinaryConfig();
+    verifyUploadedAssetMetadata({
+      config,
+      eventId: event.id,
+      publicId: dto.publicId.trim(),
+      resourceType: dto.resourceType,
+      format: dto.format,
+      secureUrl: dto.secureUrl.trim(),
+      bytes: dto.bytes,
+      version: dto.version,
+      responseSignature: dto.responseSignature,
+    });
+
+    const normalizedFormat = dto.format.trim().toLowerCase().replace(/^\./, '');
+    const assetId = dto.assetId.trim();
+    const publicId = dto.publicId.trim();
+    const targetStatus =
+      (dto.status as PortfolioMediaStatus | undefined) ?? PortfolioMediaStatus.READY;
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.portfolioMedia.findFirst({
+        where: {
+          eventId,
+          OR: [{ assetId }, { publicId }],
+        },
+      });
+
+      if (existing) {
+        const updated = await tx.portfolioMedia.update({
+          where: { id: existing.id },
+          data: {
+            assetId,
+            publicId,
+            format: normalizedFormat,
+            secureUrl: dto.secureUrl.trim(),
+            bytes: dto.bytes,
+            width: dto.width ?? existing.width,
+            height: dto.height ?? existing.height,
+            durationSeconds: dto.durationSeconds ?? existing.durationSeconds,
+            caption: dto.caption !== undefined ? dto.caption.trim() || null : existing.caption,
+            altText: dto.altText !== undefined ? dto.altText.trim() || null : existing.altText,
+            status: targetStatus,
+            errorMessage: dto.errorMessage ?? null,
+          },
+        });
+
+        if (
+          !event.coverMediaId &&
+          updated.resourceType === PortfolioMediaType.IMAGE &&
+          updated.status === PortfolioMediaStatus.READY
+        ) {
+          await tx.portfolioEvent.update({
+            where: { id: eventId },
+            data: { coverMediaId: updated.id },
+          });
+        }
+
+        return {
+          media: this.serializePortfolioMedia(updated),
+          idempotentReplay: true,
+        };
+      }
+
+      const lastMedia = await tx.portfolioMedia.findFirst({
+        where: { eventId },
+        orderBy: { displayOrder: 'desc' },
+        select: { displayOrder: true },
+      });
+      const nextDisplayOrder = (lastMedia?.displayOrder ?? -1) + 1;
+
+      const created = await tx.portfolioMedia.create({
+        data: {
+          eventId,
+          assetId,
+          publicId,
+          resourceType: dto.resourceType as PortfolioMediaType,
+          format: normalizedFormat,
+          secureUrl: dto.secureUrl.trim(),
+          bytes: dto.bytes,
+          width: dto.width ?? null,
+          height: dto.height ?? null,
+          durationSeconds: dto.durationSeconds ?? null,
+          caption: dto.caption?.trim() || null,
+          altText: dto.altText?.trim() || event.title,
+          displayOrder: nextDisplayOrder,
+          status: targetStatus,
+          errorMessage: dto.errorMessage ?? null,
+        },
+      });
+
+      if (
+        !event.coverMediaId &&
+        created.resourceType === PortfolioMediaType.IMAGE &&
+        created.status === PortfolioMediaStatus.READY
+      ) {
+        await tx.portfolioEvent.update({
+          where: { id: eventId },
+          data: { coverMediaId: created.id },
+        });
+      }
+
+      return {
+        media: this.serializePortfolioMedia(created),
+        idempotentReplay: false,
+      };
+    });
+  }
+
+  async updatePortfolioMedia(
+    eventId: string,
+    mediaId: string,
+    dto: UpdatePortfolioMediaDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.portfolioMedia.findFirst({
+        where: { id: mediaId, eventId },
+      });
+      if (!existing) {
+        throw new NotFoundException('Portfolio media item not found for this event');
+      }
+
+      const nextStatus =
+        (dto.status as PortfolioMediaStatus | undefined) ?? existing.status;
+
+      if (dto.isCover) {
+        if (existing.resourceType !== PortfolioMediaType.IMAGE) {
+          throw new BadRequestException('Only an image can be set as the event cover image.');
+        }
+        if (nextStatus !== PortfolioMediaStatus.READY) {
+          throw new BadRequestException('Cover image must have status READY.');
+        }
+      }
+
+      const updated = await tx.portfolioMedia.update({
+        where: { id: mediaId },
+        data: {
+          caption: dto.caption !== undefined ? dto.caption.trim() || null : undefined,
+          altText: dto.altText !== undefined ? dto.altText.trim() || null : undefined,
+          status: dto.status as PortfolioMediaStatus | undefined,
+          errorMessage: dto.errorMessage !== undefined ? dto.errorMessage : undefined,
+        },
+      });
+
+      if (dto.isCover) {
+        await tx.portfolioEvent.update({
+          where: { id: eventId },
+          data: { coverMediaId: mediaId },
+        });
+      }
+
+      return this.serializePortfolioMedia(updated);
+    });
+  }
+
+  async reorderPortfolioMedia(eventId: string, dto: ReorderPortfolioMediaDto) {
+    const event = await this.prisma.portfolioEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    });
+    if (!event) {
+      throw new NotFoundException('Portfolio showcase event not found');
+    }
+
+    const existingMedia = await this.prisma.portfolioMedia.findMany({
+      where: { eventId },
+      select: { id: true },
+    });
+    const existingIds = new Set(existingMedia.map((m) => m.id));
+    for (const id of dto.mediaIds) {
+      if (!existingIds.has(id)) {
+        throw new BadRequestException(`Media item ${id} does not belong to this event.`);
+      }
+    }
+
+    await this.prisma.$transaction(
+      dto.mediaIds.map((mediaId, index) =>
+        this.prisma.portfolioMedia.update({
+          where: { id: mediaId },
+          data: { displayOrder: index },
+        }),
+      ),
+    );
+
+    return this.getAdminPortfolioEvent(eventId);
+  }
+
+  async removePortfolioMedia(eventId: string, mediaId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const event = await tx.portfolioEvent.findUnique({
+        where: { id: eventId },
+        select: { id: true, coverMediaId: true, status: true },
+      });
+      if (!event) {
+        throw new NotFoundException('Portfolio showcase event not found');
+      }
+
+      const existing = await tx.portfolioMedia.findFirst({
+        where: { id: mediaId, eventId },
+      });
+      if (!existing) {
+        throw new NotFoundException('Portfolio media item not found');
+      }
+
+      await tx.portfolioMedia.delete({ where: { id: mediaId } });
+
+      if (event.coverMediaId === mediaId) {
+        const replacementCover = await tx.portfolioMedia.findFirst({
+          where: {
+            eventId,
+            resourceType: PortfolioMediaType.IMAGE,
+            status: PortfolioMediaStatus.READY,
+          },
+          orderBy: { displayOrder: 'asc' },
+          select: { id: true },
+        });
+
+        await tx.portfolioEvent.update({
+          where: { id: eventId },
+          data: {
+            coverMediaId: replacementCover?.id ?? null,
+            // If published event lost its last ready cover image, revert to DRAFT automatically
+            status:
+              !replacementCover && event.status === PortfolioEventStatus.PUBLISHED
+                ? PortfolioEventStatus.DRAFT
+                : event.status,
+          },
+        });
+      }
+
+      return { deletedMediaId: mediaId };
+    });
+  }
+
+  async publishPortfolioEvent(eventId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const event = await tx.portfolioEvent.findUnique({
+        where: { id: eventId },
+        include: {
+          coverMedia: true,
+          media: { orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] },
+        },
+      });
+      if (!event) {
+        throw new NotFoundException('Portfolio showcase event not found');
+      }
+
+      let resolvedCover =
+        event.coverMedia &&
+        event.coverMedia.resourceType === PortfolioMediaType.IMAGE &&
+        event.coverMedia.status === PortfolioMediaStatus.READY
+          ? event.coverMedia
+          : null;
+
+      if (!resolvedCover) {
+        resolvedCover =
+          event.media.find(
+            (m) =>
+              m.resourceType === PortfolioMediaType.IMAGE &&
+              m.status === PortfolioMediaStatus.READY,
+          ) ?? null;
+      }
+
+      if (!resolvedCover) {
+        throw new BadRequestException(
+          'Cannot publish showcase event: at least one READY cover image is required before publishing.',
+        );
+      }
+
+      const updated = await tx.portfolioEvent.update({
+        where: { id: eventId },
+        data: {
+          status: PortfolioEventStatus.PUBLISHED,
+          coverMediaId: resolvedCover.id,
+          publishedAt: event.publishedAt ?? new Date(),
+        },
+        include: {
+          eventType: { select: { id: true, name: true, slug: true } },
+          coverMedia: true,
+          media: { orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] },
+        },
+      });
+
+      return this.serializePortfolioEvent(updated);
+    });
+  }
+
+  async unpublishPortfolioEvent(eventId: string) {
+    const existing = await this.prisma.portfolioEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Portfolio showcase event not found');
+    }
+
+    const updated = await this.prisma.portfolioEvent.update({
+      where: { id: eventId },
+      data: { status: PortfolioEventStatus.DRAFT },
+      include: {
+        eventType: { select: { id: true, name: true, slug: true } },
+        coverMedia: true,
+        media: { orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+    return this.serializePortfolioEvent(updated);
+  }
+
+  async archivePortfolioEvent(eventId: string) {
+    const existing = await this.prisma.portfolioEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Portfolio showcase event not found');
+    }
+
+    const updated = await this.prisma.portfolioEvent.update({
+      where: { id: eventId },
+      data: { status: PortfolioEventStatus.ARCHIVED },
+      include: {
+        eventType: { select: { id: true, name: true, slug: true } },
+        coverMedia: true,
+        media: { orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+    return this.serializePortfolioEvent(updated);
+  }
+
+  async listPublicPortfolioEvents(query: PaginationQueryDto) {
+    const { page, limit, skip } = getPaginationParams(query);
+    const where: Prisma.PortfolioEventWhereInput = {
+      status: PortfolioEventStatus.PUBLISHED,
+      coverMedia: {
+        is: {
+          resourceType: PortfolioMediaType.IMAGE,
+          status: PortfolioMediaStatus.READY,
+        },
+      },
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.portfolioEvent.findMany({
+        where,
+        include: {
+          eventType: { select: { id: true, name: true, slug: true } },
+          coverMedia: true,
+          media: {
+            where: { status: PortfolioMediaStatus.READY },
+            orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+          },
+        },
+        orderBy: [{ sortOrder: 'asc' }, { eventDate: 'desc' }, { publishedAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      this.prisma.portfolioEvent.count({ where }),
+    ]);
+
+    return {
+      data: items.map((ev) => this.serializePortfolioEvent(ev)),
+      meta: { page, limit, total },
+    };
+  }
+
+  async getPublicPortfolioEventBySlug(slugOrId: string) {
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        slugOrId,
+      );
+
+    const event = await this.prisma.portfolioEvent.findFirst({
+      where: {
+        ...(isUuid ? { OR: [{ slug: slugOrId.toLowerCase() }, { id: slugOrId }] } : { slug: slugOrId.toLowerCase() }),
+        status: PortfolioEventStatus.PUBLISHED,
+        coverMedia: {
+          is: {
+            resourceType: PortfolioMediaType.IMAGE,
+            status: PortfolioMediaStatus.READY,
+          },
+        },
+      },
+      include: {
+        eventType: { select: { id: true, name: true, slug: true } },
+        coverMedia: true,
+        media: {
+          where: { status: PortfolioMediaStatus.READY },
+          orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException('Published showcase event not found');
+    }
+
+    return this.serializePortfolioEvent(event);
   }
 }

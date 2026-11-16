@@ -2,7 +2,9 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -10,6 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { PaginationQueryDto } from '../../../common/dto/pagination.dto.js';
 
 export class CreateEventTypeDto {
   @IsString()
@@ -230,3 +233,182 @@ export class UpdateTaskTemplateDto {
   @IsBoolean()
   isActive?: boolean;
 }
+
+export class CreatePortfolioEventDto {
+  @IsString()
+  title!: string;
+
+  @IsString()
+  @Matches(/^[a-z0-9-]+$/, {
+    message: 'slug must contain only lowercase letters, numbers, and hyphens',
+  })
+  slug!: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'eventDate must be a valid YYYY-MM-DD date string',
+  })
+  eventDate?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @IsOptional()
+  @IsUUID()
+  eventTypeId?: string;
+}
+
+export class UpdatePortfolioEventDto {
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-z0-9-]+$/, {
+    message: 'slug must contain only lowercase letters, numbers, and hyphens',
+  })
+  slug?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'eventDate must be a valid YYYY-MM-DD date string',
+  })
+  eventDate?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @IsOptional()
+  @IsUUID()
+  eventTypeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  coverMediaId?: string;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
+}
+
+export class SignPortfolioUploadDto {
+  @IsIn(['IMAGE', 'VIDEO'])
+  resourceType!: 'IMAGE' | 'VIDEO';
+
+  @IsString()
+  format!: string;
+
+  @IsInt()
+  @Min(1)
+  bytes!: number;
+}
+
+export class RegisterPortfolioMediaDto {
+  @IsString()
+  assetId!: string;
+
+  @IsString()
+  publicId!: string;
+
+  @IsIn(['IMAGE', 'VIDEO'])
+  resourceType!: 'IMAGE' | 'VIDEO';
+
+  @IsString()
+  format!: string;
+
+  @IsString()
+  secureUrl!: string;
+
+  @IsInt()
+  @Min(1)
+  bytes!: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  width?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  height?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  durationSeconds?: number;
+
+  @IsOptional()
+  @IsString()
+  caption?: string;
+
+  @IsOptional()
+  @IsString()
+  altText?: string;
+
+  @IsOptional()
+  @IsIn(['PROCESSING', 'READY', 'FAILED'])
+  status?: 'PROCESSING' | 'READY' | 'FAILED';
+
+  @IsOptional()
+  @IsString()
+  errorMessage?: string;
+
+  @IsOptional()
+  @IsInt()
+  version?: number;
+
+  @IsOptional()
+  @IsString()
+  responseSignature?: string;
+}
+
+export class UpdatePortfolioMediaDto {
+  @IsOptional()
+  @IsString()
+  caption?: string;
+
+  @IsOptional()
+  @IsString()
+  altText?: string;
+
+  @IsOptional()
+  @IsIn(['PROCESSING', 'READY', 'FAILED'])
+  status?: 'PROCESSING' | 'READY' | 'FAILED';
+
+  @IsOptional()
+  @IsString()
+  errorMessage?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isCover?: boolean;
+}
+
+export class ReorderPortfolioMediaDto {
+  @IsArray()
+  @IsUUID('4', { each: true })
+  mediaIds!: string[];
+}
+
+export class ListPortfolioEventsQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsIn(['DRAFT', 'PUBLISHED', 'ARCHIVED'])
+  status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
+  @IsOptional()
+  @IsUUID()
+  eventTypeId?: string;
+}
+

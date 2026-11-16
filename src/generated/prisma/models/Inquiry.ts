@@ -629,10 +629,6 @@ export type InquiryUncheckedUpdateManyWithoutPackageNestedInput = {
   deleteMany?: Prisma.InquiryScalarWhereInput | Prisma.InquiryScalarWhereInput[]
 }
 
-export type NullableDateTimeFieldUpdateOperationsInput = {
-  set?: Date | string | null
-}
-
 export type EnumInquiryStatusFieldUpdateOperationsInput = {
   set?: $Enums.InquiryStatus
 }

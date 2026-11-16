@@ -200,6 +200,7 @@ export type EventTypeWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"EventType"> | Date | string
   packages?: Prisma.PackageListRelationFilter
   portfolioItems?: Prisma.PortfolioItemListRelationFilter
+  portfolioEvents?: Prisma.PortfolioEventListRelationFilter
   taskTemplates?: Prisma.TaskTemplateListRelationFilter
   deliverableLabels?: Prisma.DeliverableLabelListRelationFilter
   inquiries?: Prisma.InquiryListRelationFilter
@@ -217,6 +218,7 @@ export type EventTypeOrderByWithRelationInput = {
   updatedAt?: Prisma.SortOrder
   packages?: Prisma.PackageOrderByRelationAggregateInput
   portfolioItems?: Prisma.PortfolioItemOrderByRelationAggregateInput
+  portfolioEvents?: Prisma.PortfolioEventOrderByRelationAggregateInput
   taskTemplates?: Prisma.TaskTemplateOrderByRelationAggregateInput
   deliverableLabels?: Prisma.DeliverableLabelOrderByRelationAggregateInput
   inquiries?: Prisma.InquiryOrderByRelationAggregateInput
@@ -237,6 +239,7 @@ export type EventTypeWhereUniqueInput = Prisma.AtLeast<{
   updatedAt?: Prisma.DateTimeFilter<"EventType"> | Date | string
   packages?: Prisma.PackageListRelationFilter
   portfolioItems?: Prisma.PortfolioItemListRelationFilter
+  portfolioEvents?: Prisma.PortfolioEventListRelationFilter
   taskTemplates?: Prisma.TaskTemplateListRelationFilter
   deliverableLabels?: Prisma.DeliverableLabelListRelationFilter
   inquiries?: Prisma.InquiryListRelationFilter
@@ -280,6 +283,7 @@ export type EventTypeCreateInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryCreateNestedManyWithoutEventTypeInput
@@ -297,6 +301,7 @@ export type EventTypeUncheckedCreateInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageUncheckedCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemUncheckedCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateUncheckedCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryUncheckedCreateNestedManyWithoutEventTypeInput
@@ -314,6 +319,7 @@ export type EventTypeUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUpdateManyWithoutEventTypeNestedInput
@@ -331,6 +337,7 @@ export type EventTypeUncheckedUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUncheckedUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUncheckedUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUncheckedUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUncheckedUpdateManyWithoutEventTypeNestedInput
@@ -435,6 +442,22 @@ export type EventTypeUpdateOneWithoutPortfolioItemsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.EventTypeUpdateToOneWithWhereWithoutPortfolioItemsInput, Prisma.EventTypeUpdateWithoutPortfolioItemsInput>, Prisma.EventTypeUncheckedUpdateWithoutPortfolioItemsInput>
 }
 
+export type EventTypeCreateNestedOneWithoutPortfolioEventsInput = {
+  create?: Prisma.XOR<Prisma.EventTypeCreateWithoutPortfolioEventsInput, Prisma.EventTypeUncheckedCreateWithoutPortfolioEventsInput>
+  connectOrCreate?: Prisma.EventTypeCreateOrConnectWithoutPortfolioEventsInput
+  connect?: Prisma.EventTypeWhereUniqueInput
+}
+
+export type EventTypeUpdateOneWithoutPortfolioEventsNestedInput = {
+  create?: Prisma.XOR<Prisma.EventTypeCreateWithoutPortfolioEventsInput, Prisma.EventTypeUncheckedCreateWithoutPortfolioEventsInput>
+  connectOrCreate?: Prisma.EventTypeCreateOrConnectWithoutPortfolioEventsInput
+  upsert?: Prisma.EventTypeUpsertWithoutPortfolioEventsInput
+  disconnect?: Prisma.EventTypeWhereInput | boolean
+  delete?: Prisma.EventTypeWhereInput | boolean
+  connect?: Prisma.EventTypeWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.EventTypeUpdateToOneWithWhereWithoutPortfolioEventsInput, Prisma.EventTypeUpdateWithoutPortfolioEventsInput>, Prisma.EventTypeUncheckedUpdateWithoutPortfolioEventsInput>
+}
+
 export type EventTypeCreateNestedOneWithoutTaskTemplatesInput = {
   create?: Prisma.XOR<Prisma.EventTypeCreateWithoutTaskTemplatesInput, Prisma.EventTypeUncheckedCreateWithoutTaskTemplatesInput>
   connectOrCreate?: Prisma.EventTypeCreateOrConnectWithoutTaskTemplatesInput
@@ -524,6 +547,7 @@ export type EventTypeCreateWithoutPackagesInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   portfolioItems?: Prisma.PortfolioItemCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryCreateNestedManyWithoutEventTypeInput
@@ -540,6 +564,7 @@ export type EventTypeUncheckedCreateWithoutPackagesInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   portfolioItems?: Prisma.PortfolioItemUncheckedCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateUncheckedCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryUncheckedCreateNestedManyWithoutEventTypeInput
@@ -572,6 +597,7 @@ export type EventTypeUpdateWithoutPackagesInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   portfolioItems?: Prisma.PortfolioItemUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUpdateManyWithoutEventTypeNestedInput
@@ -588,6 +614,7 @@ export type EventTypeUncheckedUpdateWithoutPackagesInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   portfolioItems?: Prisma.PortfolioItemUncheckedUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUncheckedUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUncheckedUpdateManyWithoutEventTypeNestedInput
@@ -604,6 +631,7 @@ export type EventTypeCreateWithoutPortfolioItemsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   packages?: Prisma.PackageCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryCreateNestedManyWithoutEventTypeInput
@@ -620,6 +648,7 @@ export type EventTypeUncheckedCreateWithoutPortfolioItemsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   packages?: Prisma.PackageUncheckedCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateUncheckedCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryUncheckedCreateNestedManyWithoutEventTypeInput
@@ -652,6 +681,7 @@ export type EventTypeUpdateWithoutPortfolioItemsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUpdateManyWithoutEventTypeNestedInput
@@ -668,6 +698,91 @@ export type EventTypeUncheckedUpdateWithoutPortfolioItemsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUncheckedUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedUpdateManyWithoutEventTypeNestedInput
+  taskTemplates?: Prisma.TaskTemplateUncheckedUpdateManyWithoutEventTypeNestedInput
+  deliverableLabels?: Prisma.DeliverableLabelUncheckedUpdateManyWithoutEventTypeNestedInput
+  inquiries?: Prisma.InquiryUncheckedUpdateManyWithoutEventTypeNestedInput
+  quotes?: Prisma.QuoteUncheckedUpdateManyWithoutEventTypeNestedInput
+  bookings?: Prisma.BookingUncheckedUpdateManyWithoutEventTypeNestedInput
+}
+
+export type EventTypeCreateWithoutPortfolioEventsInput = {
+  id?: string
+  name: string
+  slug: string
+  description?: string | null
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  packages?: Prisma.PackageCreateNestedManyWithoutEventTypeInput
+  portfolioItems?: Prisma.PortfolioItemCreateNestedManyWithoutEventTypeInput
+  taskTemplates?: Prisma.TaskTemplateCreateNestedManyWithoutEventTypeInput
+  deliverableLabels?: Prisma.DeliverableLabelCreateNestedManyWithoutEventTypeInput
+  inquiries?: Prisma.InquiryCreateNestedManyWithoutEventTypeInput
+  quotes?: Prisma.QuoteCreateNestedManyWithoutEventTypeInput
+  bookings?: Prisma.BookingCreateNestedManyWithoutEventTypeInput
+}
+
+export type EventTypeUncheckedCreateWithoutPortfolioEventsInput = {
+  id?: string
+  name: string
+  slug: string
+  description?: string | null
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  packages?: Prisma.PackageUncheckedCreateNestedManyWithoutEventTypeInput
+  portfolioItems?: Prisma.PortfolioItemUncheckedCreateNestedManyWithoutEventTypeInput
+  taskTemplates?: Prisma.TaskTemplateUncheckedCreateNestedManyWithoutEventTypeInput
+  deliverableLabels?: Prisma.DeliverableLabelUncheckedCreateNestedManyWithoutEventTypeInput
+  inquiries?: Prisma.InquiryUncheckedCreateNestedManyWithoutEventTypeInput
+  quotes?: Prisma.QuoteUncheckedCreateNestedManyWithoutEventTypeInput
+  bookings?: Prisma.BookingUncheckedCreateNestedManyWithoutEventTypeInput
+}
+
+export type EventTypeCreateOrConnectWithoutPortfolioEventsInput = {
+  where: Prisma.EventTypeWhereUniqueInput
+  create: Prisma.XOR<Prisma.EventTypeCreateWithoutPortfolioEventsInput, Prisma.EventTypeUncheckedCreateWithoutPortfolioEventsInput>
+}
+
+export type EventTypeUpsertWithoutPortfolioEventsInput = {
+  update: Prisma.XOR<Prisma.EventTypeUpdateWithoutPortfolioEventsInput, Prisma.EventTypeUncheckedUpdateWithoutPortfolioEventsInput>
+  create: Prisma.XOR<Prisma.EventTypeCreateWithoutPortfolioEventsInput, Prisma.EventTypeUncheckedCreateWithoutPortfolioEventsInput>
+  where?: Prisma.EventTypeWhereInput
+}
+
+export type EventTypeUpdateToOneWithWhereWithoutPortfolioEventsInput = {
+  where?: Prisma.EventTypeWhereInput
+  data: Prisma.XOR<Prisma.EventTypeUpdateWithoutPortfolioEventsInput, Prisma.EventTypeUncheckedUpdateWithoutPortfolioEventsInput>
+}
+
+export type EventTypeUpdateWithoutPortfolioEventsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  packages?: Prisma.PackageUpdateManyWithoutEventTypeNestedInput
+  portfolioItems?: Prisma.PortfolioItemUpdateManyWithoutEventTypeNestedInput
+  taskTemplates?: Prisma.TaskTemplateUpdateManyWithoutEventTypeNestedInput
+  deliverableLabels?: Prisma.DeliverableLabelUpdateManyWithoutEventTypeNestedInput
+  inquiries?: Prisma.InquiryUpdateManyWithoutEventTypeNestedInput
+  quotes?: Prisma.QuoteUpdateManyWithoutEventTypeNestedInput
+  bookings?: Prisma.BookingUpdateManyWithoutEventTypeNestedInput
+}
+
+export type EventTypeUncheckedUpdateWithoutPortfolioEventsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  packages?: Prisma.PackageUncheckedUpdateManyWithoutEventTypeNestedInput
+  portfolioItems?: Prisma.PortfolioItemUncheckedUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUncheckedUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUncheckedUpdateManyWithoutEventTypeNestedInput
@@ -685,6 +800,7 @@ export type EventTypeCreateWithoutTaskTemplatesInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryCreateNestedManyWithoutEventTypeInput
   quotes?: Prisma.QuoteCreateNestedManyWithoutEventTypeInput
@@ -701,6 +817,7 @@ export type EventTypeUncheckedCreateWithoutTaskTemplatesInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageUncheckedCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemUncheckedCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryUncheckedCreateNestedManyWithoutEventTypeInput
   quotes?: Prisma.QuoteUncheckedCreateNestedManyWithoutEventTypeInput
@@ -733,6 +850,7 @@ export type EventTypeUpdateWithoutTaskTemplatesInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUpdateManyWithoutEventTypeNestedInput
   quotes?: Prisma.QuoteUpdateManyWithoutEventTypeNestedInput
@@ -749,6 +867,7 @@ export type EventTypeUncheckedUpdateWithoutTaskTemplatesInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUncheckedUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUncheckedUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUncheckedUpdateManyWithoutEventTypeNestedInput
   quotes?: Prisma.QuoteUncheckedUpdateManyWithoutEventTypeNestedInput
@@ -765,6 +884,7 @@ export type EventTypeCreateWithoutDeliverableLabelsInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryCreateNestedManyWithoutEventTypeInput
   quotes?: Prisma.QuoteCreateNestedManyWithoutEventTypeInput
@@ -781,6 +901,7 @@ export type EventTypeUncheckedCreateWithoutDeliverableLabelsInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageUncheckedCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemUncheckedCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateUncheckedCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryUncheckedCreateNestedManyWithoutEventTypeInput
   quotes?: Prisma.QuoteUncheckedCreateNestedManyWithoutEventTypeInput
@@ -813,6 +934,7 @@ export type EventTypeUpdateWithoutDeliverableLabelsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUpdateManyWithoutEventTypeNestedInput
   quotes?: Prisma.QuoteUpdateManyWithoutEventTypeNestedInput
@@ -829,6 +951,7 @@ export type EventTypeUncheckedUpdateWithoutDeliverableLabelsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUncheckedUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUncheckedUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUncheckedUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUncheckedUpdateManyWithoutEventTypeNestedInput
   quotes?: Prisma.QuoteUncheckedUpdateManyWithoutEventTypeNestedInput
@@ -845,6 +968,7 @@ export type EventTypeCreateWithoutInquiriesInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelCreateNestedManyWithoutEventTypeInput
   quotes?: Prisma.QuoteCreateNestedManyWithoutEventTypeInput
@@ -861,6 +985,7 @@ export type EventTypeUncheckedCreateWithoutInquiriesInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageUncheckedCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemUncheckedCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateUncheckedCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedCreateNestedManyWithoutEventTypeInput
   quotes?: Prisma.QuoteUncheckedCreateNestedManyWithoutEventTypeInput
@@ -893,6 +1018,7 @@ export type EventTypeUpdateWithoutInquiriesInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUpdateManyWithoutEventTypeNestedInput
   quotes?: Prisma.QuoteUpdateManyWithoutEventTypeNestedInput
@@ -909,6 +1035,7 @@ export type EventTypeUncheckedUpdateWithoutInquiriesInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUncheckedUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUncheckedUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUncheckedUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedUpdateManyWithoutEventTypeNestedInput
   quotes?: Prisma.QuoteUncheckedUpdateManyWithoutEventTypeNestedInput
@@ -925,6 +1052,7 @@ export type EventTypeCreateWithoutQuotesInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryCreateNestedManyWithoutEventTypeInput
@@ -941,6 +1069,7 @@ export type EventTypeUncheckedCreateWithoutQuotesInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageUncheckedCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemUncheckedCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateUncheckedCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryUncheckedCreateNestedManyWithoutEventTypeInput
@@ -973,6 +1102,7 @@ export type EventTypeUpdateWithoutQuotesInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUpdateManyWithoutEventTypeNestedInput
@@ -989,6 +1119,7 @@ export type EventTypeUncheckedUpdateWithoutQuotesInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUncheckedUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUncheckedUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUncheckedUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUncheckedUpdateManyWithoutEventTypeNestedInput
@@ -1005,6 +1136,7 @@ export type EventTypeCreateWithoutBookingsInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryCreateNestedManyWithoutEventTypeInput
@@ -1021,6 +1153,7 @@ export type EventTypeUncheckedCreateWithoutBookingsInput = {
   updatedAt?: Date | string
   packages?: Prisma.PackageUncheckedCreateNestedManyWithoutEventTypeInput
   portfolioItems?: Prisma.PortfolioItemUncheckedCreateNestedManyWithoutEventTypeInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedCreateNestedManyWithoutEventTypeInput
   taskTemplates?: Prisma.TaskTemplateUncheckedCreateNestedManyWithoutEventTypeInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedCreateNestedManyWithoutEventTypeInput
   inquiries?: Prisma.InquiryUncheckedCreateNestedManyWithoutEventTypeInput
@@ -1053,6 +1186,7 @@ export type EventTypeUpdateWithoutBookingsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUpdateManyWithoutEventTypeNestedInput
@@ -1069,6 +1203,7 @@ export type EventTypeUncheckedUpdateWithoutBookingsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   packages?: Prisma.PackageUncheckedUpdateManyWithoutEventTypeNestedInput
   portfolioItems?: Prisma.PortfolioItemUncheckedUpdateManyWithoutEventTypeNestedInput
+  portfolioEvents?: Prisma.PortfolioEventUncheckedUpdateManyWithoutEventTypeNestedInput
   taskTemplates?: Prisma.TaskTemplateUncheckedUpdateManyWithoutEventTypeNestedInput
   deliverableLabels?: Prisma.DeliverableLabelUncheckedUpdateManyWithoutEventTypeNestedInput
   inquiries?: Prisma.InquiryUncheckedUpdateManyWithoutEventTypeNestedInput
@@ -1083,6 +1218,7 @@ export type EventTypeUncheckedUpdateWithoutBookingsInput = {
 export type EventTypeCountOutputType = {
   packages: number
   portfolioItems: number
+  portfolioEvents: number
   taskTemplates: number
   deliverableLabels: number
   inquiries: number
@@ -1093,6 +1229,7 @@ export type EventTypeCountOutputType = {
 export type EventTypeCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   packages?: boolean | EventTypeCountOutputTypeCountPackagesArgs
   portfolioItems?: boolean | EventTypeCountOutputTypeCountPortfolioItemsArgs
+  portfolioEvents?: boolean | EventTypeCountOutputTypeCountPortfolioEventsArgs
   taskTemplates?: boolean | EventTypeCountOutputTypeCountTaskTemplatesArgs
   deliverableLabels?: boolean | EventTypeCountOutputTypeCountDeliverableLabelsArgs
   inquiries?: boolean | EventTypeCountOutputTypeCountInquiriesArgs
@@ -1122,6 +1259,13 @@ export type EventTypeCountOutputTypeCountPackagesArgs<ExtArgs extends runtime.Ty
  */
 export type EventTypeCountOutputTypeCountPortfolioItemsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.PortfolioItemWhereInput
+}
+
+/**
+ * EventTypeCountOutputType without action
+ */
+export type EventTypeCountOutputTypeCountPortfolioEventsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PortfolioEventWhereInput
 }
 
 /**
@@ -1170,6 +1314,7 @@ export type EventTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   updatedAt?: boolean
   packages?: boolean | Prisma.EventType$packagesArgs<ExtArgs>
   portfolioItems?: boolean | Prisma.EventType$portfolioItemsArgs<ExtArgs>
+  portfolioEvents?: boolean | Prisma.EventType$portfolioEventsArgs<ExtArgs>
   taskTemplates?: boolean | Prisma.EventType$taskTemplatesArgs<ExtArgs>
   deliverableLabels?: boolean | Prisma.EventType$deliverableLabelsArgs<ExtArgs>
   inquiries?: boolean | Prisma.EventType$inquiriesArgs<ExtArgs>
@@ -1212,6 +1357,7 @@ export type EventTypeOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs 
 export type EventTypeInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   packages?: boolean | Prisma.EventType$packagesArgs<ExtArgs>
   portfolioItems?: boolean | Prisma.EventType$portfolioItemsArgs<ExtArgs>
+  portfolioEvents?: boolean | Prisma.EventType$portfolioEventsArgs<ExtArgs>
   taskTemplates?: boolean | Prisma.EventType$taskTemplatesArgs<ExtArgs>
   deliverableLabels?: boolean | Prisma.EventType$deliverableLabelsArgs<ExtArgs>
   inquiries?: boolean | Prisma.EventType$inquiriesArgs<ExtArgs>
@@ -1227,6 +1373,7 @@ export type $EventTypePayload<ExtArgs extends runtime.Types.Extensions.InternalA
   objects: {
     packages: Prisma.$PackagePayload<ExtArgs>[]
     portfolioItems: Prisma.$PortfolioItemPayload<ExtArgs>[]
+    portfolioEvents: Prisma.$PortfolioEventPayload<ExtArgs>[]
     taskTemplates: Prisma.$TaskTemplatePayload<ExtArgs>[]
     deliverableLabels: Prisma.$DeliverableLabelPayload<ExtArgs>[]
     inquiries: Prisma.$InquiryPayload<ExtArgs>[]
@@ -1637,6 +1784,7 @@ export interface Prisma__EventTypeClient<T, Null = never, ExtArgs extends runtim
   readonly [Symbol.toStringTag]: "PrismaPromise"
   packages<T extends Prisma.EventType$packagesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EventType$packagesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PackagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   portfolioItems<T extends Prisma.EventType$portfolioItemsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EventType$portfolioItemsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PortfolioItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  portfolioEvents<T extends Prisma.EventType$portfolioEventsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EventType$portfolioEventsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PortfolioEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   taskTemplates<T extends Prisma.EventType$taskTemplatesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EventType$taskTemplatesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TaskTemplatePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   deliverableLabels<T extends Prisma.EventType$deliverableLabelsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EventType$deliverableLabelsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DeliverableLabelPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   inquiries<T extends Prisma.EventType$inquiriesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EventType$inquiriesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$InquiryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -2116,6 +2264,30 @@ export type EventType$portfolioItemsArgs<ExtArgs extends runtime.Types.Extension
   take?: number
   skip?: number
   distinct?: Prisma.PortfolioItemScalarFieldEnum | Prisma.PortfolioItemScalarFieldEnum[]
+}
+
+/**
+ * EventType.portfolioEvents
+ */
+export type EventType$portfolioEventsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PortfolioEvent
+   */
+  select?: Prisma.PortfolioEventSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PortfolioEvent
+   */
+  omit?: Prisma.PortfolioEventOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PortfolioEventInclude<ExtArgs> | null
+  where?: Prisma.PortfolioEventWhereInput
+  orderBy?: Prisma.PortfolioEventOrderByWithRelationInput | Prisma.PortfolioEventOrderByWithRelationInput[]
+  cursor?: Prisma.PortfolioEventWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PortfolioEventScalarFieldEnum | Prisma.PortfolioEventScalarFieldEnum[]
 }
 
 /**

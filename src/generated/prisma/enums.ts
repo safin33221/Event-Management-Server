@@ -174,3 +174,30 @@ export const DeliverableStatus = {
 } as const
 
 export type DeliverableStatus = (typeof DeliverableStatus)[keyof typeof DeliverableStatus]
+
+
+export const PortfolioEventStatus = {
+  DRAFT: 'DRAFT',
+  PUBLISHED: 'PUBLISHED',
+  ARCHIVED: 'ARCHIVED'
+} as const
+
+export type PortfolioEventStatus = (typeof PortfolioEventStatus)[keyof typeof PortfolioEventStatus]
+
+
+export const PortfolioMediaType = {
+  IMAGE: 'IMAGE',
+  VIDEO: 'VIDEO'
+} as const
+
+export type PortfolioMediaType = (typeof PortfolioMediaType)[keyof typeof PortfolioMediaType]
+
+
+export const PortfolioMediaStatus = {
+  UPLOADING: 'UPLOADING',
+  PROCESSING: 'PROCESSING',
+  READY: 'READY',
+  FAILED: 'FAILED'
+} as const
+
+export type PortfolioMediaStatus = (typeof PortfolioMediaStatus)[keyof typeof PortfolioMediaStatus]

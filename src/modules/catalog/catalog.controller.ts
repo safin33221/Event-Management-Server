@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { UserRole } from '../../generated/prisma/client.js';
 import { Roles } from '../../common/guards/auth.guard.js';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto.js';
@@ -7,12 +17,19 @@ import {
   CreateDeliverableLabelDto,
   CreateEventTypeDto,
   CreatePackageDto,
+  CreatePortfolioEventDto,
   CreatePortfolioItemDto,
   CreateServiceItemDto,
   CreateTaskTemplateDto,
+  ListPortfolioEventsQueryDto,
+  RegisterPortfolioMediaDto,
+  ReorderPortfolioMediaDto,
+  SignPortfolioUploadDto,
   UpdateDeliverableLabelDto,
   UpdatePackageDto,
+  UpdatePortfolioEventDto,
   UpdatePortfolioItemDto,
+  UpdatePortfolioMediaDto,
   UpdateTaskTemplateDto,
 } from './dto/catalog.dto.js';
 
@@ -106,5 +123,96 @@ export class CatalogController {
   @Get('task-templates')
   listTaskTemplates() {
     return this.catalogService.listTaskTemplates();
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Get('portfolio-events')
+  listAdminPortfolioEvents(@Query() query: ListPortfolioEventsQueryDto) {
+    return this.catalogService.listAdminPortfolioEvents(query);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Get('portfolio-events/:id')
+  getAdminPortfolioEvent(@Param('id') id: string) {
+    return this.catalogService.getAdminPortfolioEvent(id);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('portfolio-events')
+  createPortfolioEvent(@Body() dto: CreatePortfolioEventDto) {
+    return this.catalogService.createPortfolioEvent(dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Patch('portfolio-events/:id')
+  updatePortfolioEvent(
+    @Param('id') id: string,
+    @Body() dto: UpdatePortfolioEventDto,
+  ) {
+    return this.catalogService.updatePortfolioEvent(id, dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('portfolio-events/:id/upload-signature')
+  signPortfolioUpload(
+    @Param('id') id: string,
+    @Body() dto: SignPortfolioUploadDto,
+  ) {
+    return this.catalogService.signPortfolioUpload(id, dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('portfolio-events/:id/media')
+  registerPortfolioMedia(
+    @Param('id') id: string,
+    @Body() dto: RegisterPortfolioMediaDto,
+  ) {
+    return this.catalogService.registerPortfolioMedia(id, dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Patch('portfolio-events/:id/media/:mediaId')
+  updatePortfolioMedia(
+    @Param('id') id: string,
+    @Param('mediaId') mediaId: string,
+    @Body() dto: UpdatePortfolioMediaDto,
+  ) {
+    return this.catalogService.updatePortfolioMedia(id, mediaId, dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Put('portfolio-events/:id/media/reorder')
+  reorderPortfolioMedia(
+    @Param('id') id: string,
+    @Body() dto: ReorderPortfolioMediaDto,
+  ) {
+    return this.catalogService.reorderPortfolioMedia(id, dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Delete('portfolio-events/:id/media/:mediaId')
+  removePortfolioMedia(
+    @Param('id') id: string,
+    @Param('mediaId') mediaId: string,
+  ) {
+    return this.catalogService.removePortfolioMedia(id, mediaId);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('portfolio-events/:id/publish')
+  publishPortfolioEvent(@Param('id') id: string) {
+    return this.catalogService.publishPortfolioEvent(id);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('portfolio-events/:id/unpublish')
+  unpublishPortfolioEvent(@Param('id') id: string) {
+    return this.catalogService.unpublishPortfolioEvent(id);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('portfolio-events/:id/archive')
+  archivePortfolioEvent(@Param('id') id: string) {
+    return this.catalogService.archivePortfolioEvent(id);
   }
 }

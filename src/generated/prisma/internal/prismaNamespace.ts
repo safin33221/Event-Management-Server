@@ -405,6 +405,8 @@ export const ModelName = {
   Package: 'Package',
   PackageItem: 'PackageItem',
   PortfolioItem: 'PortfolioItem',
+  PortfolioEvent: 'PortfolioEvent',
+  PortfolioMedia: 'PortfolioMedia',
   TaskTemplate: 'TaskTemplate',
   DeliverableLabel: 'DeliverableLabel',
   Inquiry: 'Inquiry',
@@ -436,7 +438,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "studioSettings" | "sequenceCounter" | "user" | "eventType" | "serviceItem" | "package" | "packageItem" | "portfolioItem" | "taskTemplate" | "deliverableLabel" | "inquiry" | "quote" | "quoteVersion" | "quoteLineItem" | "booking" | "resource" | "eventSession" | "resourceReservation" | "scheduleAuditLog" | "paymentEntry" | "priceAdjustment" | "auditLog" | "assignment" | "deliverable"
+    modelProps: "studioSettings" | "sequenceCounter" | "user" | "eventType" | "serviceItem" | "package" | "packageItem" | "portfolioItem" | "portfolioEvent" | "portfolioMedia" | "taskTemplate" | "deliverableLabel" | "inquiry" | "quote" | "quoteVersion" | "quoteLineItem" | "booking" | "resource" | "eventSession" | "resourceReservation" | "scheduleAuditLog" | "paymentEntry" | "priceAdjustment" | "auditLog" | "assignment" | "deliverable"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1029,6 +1031,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.PortfolioItemCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.PortfolioItemCountAggregateOutputType> | number
+        }
+      }
+    }
+    PortfolioEvent: {
+      payload: Prisma.$PortfolioEventPayload<ExtArgs>
+      fields: Prisma.PortfolioEventFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PortfolioEventFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PortfolioEventFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload>
+        }
+        findFirst: {
+          args: Prisma.PortfolioEventFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PortfolioEventFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload>
+        }
+        findMany: {
+          args: Prisma.PortfolioEventFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload>[]
+        }
+        create: {
+          args: Prisma.PortfolioEventCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload>
+        }
+        createMany: {
+          args: Prisma.PortfolioEventCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PortfolioEventCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload>[]
+        }
+        delete: {
+          args: Prisma.PortfolioEventDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload>
+        }
+        update: {
+          args: Prisma.PortfolioEventUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload>
+        }
+        deleteMany: {
+          args: Prisma.PortfolioEventDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PortfolioEventUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PortfolioEventUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload>[]
+        }
+        upsert: {
+          args: Prisma.PortfolioEventUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioEventPayload>
+        }
+        aggregate: {
+          args: Prisma.PortfolioEventAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePortfolioEvent>
+        }
+        groupBy: {
+          args: Prisma.PortfolioEventGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PortfolioEventGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PortfolioEventCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PortfolioEventCountAggregateOutputType> | number
+        }
+      }
+    }
+    PortfolioMedia: {
+      payload: Prisma.$PortfolioMediaPayload<ExtArgs>
+      fields: Prisma.PortfolioMediaFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PortfolioMediaFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PortfolioMediaFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload>
+        }
+        findFirst: {
+          args: Prisma.PortfolioMediaFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PortfolioMediaFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload>
+        }
+        findMany: {
+          args: Prisma.PortfolioMediaFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload>[]
+        }
+        create: {
+          args: Prisma.PortfolioMediaCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload>
+        }
+        createMany: {
+          args: Prisma.PortfolioMediaCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PortfolioMediaCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload>[]
+        }
+        delete: {
+          args: Prisma.PortfolioMediaDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload>
+        }
+        update: {
+          args: Prisma.PortfolioMediaUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload>
+        }
+        deleteMany: {
+          args: Prisma.PortfolioMediaDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PortfolioMediaUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PortfolioMediaUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload>[]
+        }
+        upsert: {
+          args: Prisma.PortfolioMediaUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PortfolioMediaPayload>
+        }
+        aggregate: {
+          args: Prisma.PortfolioMediaAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePortfolioMedia>
+        }
+        groupBy: {
+          args: Prisma.PortfolioMediaGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PortfolioMediaGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PortfolioMediaCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PortfolioMediaCountAggregateOutputType> | number
         }
       }
     }
@@ -2367,6 +2517,49 @@ export const PortfolioItemScalarFieldEnum = {
 export type PortfolioItemScalarFieldEnum = (typeof PortfolioItemScalarFieldEnum)[keyof typeof PortfolioItemScalarFieldEnum]
 
 
+export const PortfolioEventScalarFieldEnum = {
+  id: 'id',
+  eventTypeId: 'eventTypeId',
+  title: 'title',
+  slug: 'slug',
+  eventDate: 'eventDate',
+  description: 'description',
+  location: 'location',
+  status: 'status',
+  coverMediaId: 'coverMediaId',
+  sortOrder: 'sortOrder',
+  publishedAt: 'publishedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PortfolioEventScalarFieldEnum = (typeof PortfolioEventScalarFieldEnum)[keyof typeof PortfolioEventScalarFieldEnum]
+
+
+export const PortfolioMediaScalarFieldEnum = {
+  id: 'id',
+  eventId: 'eventId',
+  assetId: 'assetId',
+  publicId: 'publicId',
+  resourceType: 'resourceType',
+  format: 'format',
+  secureUrl: 'secureUrl',
+  bytes: 'bytes',
+  width: 'width',
+  height: 'height',
+  durationSeconds: 'durationSeconds',
+  caption: 'caption',
+  altText: 'altText',
+  displayOrder: 'displayOrder',
+  status: 'status',
+  errorMessage: 'errorMessage',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PortfolioMediaScalarFieldEnum = (typeof PortfolioMediaScalarFieldEnum)[keyof typeof PortfolioMediaScalarFieldEnum]
+
+
 export const TaskTemplateScalarFieldEnum = {
   id: 'id',
   eventTypeId: 'eventTypeId',
@@ -2790,6 +2983,62 @@ export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel,
 
 
 /**
+ * Reference to a field of type 'PortfolioEventStatus'
+ */
+export type EnumPortfolioEventStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PortfolioEventStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'PortfolioEventStatus[]'
+ */
+export type ListEnumPortfolioEventStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PortfolioEventStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'PortfolioMediaType'
+ */
+export type EnumPortfolioMediaTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PortfolioMediaType'>
+    
+
+
+/**
+ * Reference to a field of type 'PortfolioMediaType[]'
+ */
+export type ListEnumPortfolioMediaTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PortfolioMediaType[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Float'
+ */
+export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+/**
+ * Reference to a field of type 'Float[]'
+ */
+export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
+    
+
+
+/**
+ * Reference to a field of type 'PortfolioMediaStatus'
+ */
+export type EnumPortfolioMediaStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PortfolioMediaStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'PortfolioMediaStatus[]'
+ */
+export type ListEnumPortfolioMediaStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PortfolioMediaStatus[]'>
+    
+
+
+/**
  * Reference to a field of type 'InquiryStatus'
  */
 export type EnumInquiryStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'InquiryStatus'>
@@ -2998,20 +3247,6 @@ export type EnumDeliverableStatusFieldRefInput<$PrismaModel> = FieldRefInputType
 export type ListEnumDeliverableStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DeliverableStatus[]'>
     
 
-
-/**
- * Reference to a field of type 'Float'
- */
-export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
-    
-
-
-/**
- * Reference to a field of type 'Float[]'
- */
-export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
-    
-
 /**
  * Batch Payload for updateMany & deleteMany & createMany
  */
@@ -3171,6 +3406,8 @@ export type GlobalOmitConfig = {
   package?: Prisma.PackageOmit
   packageItem?: Prisma.PackageItemOmit
   portfolioItem?: Prisma.PortfolioItemOmit
+  portfolioEvent?: Prisma.PortfolioEventOmit
+  portfolioMedia?: Prisma.PortfolioMediaOmit
   taskTemplate?: Prisma.TaskTemplateOmit
   deliverableLabel?: Prisma.DeliverableLabelOmit
   inquiry?: Prisma.InquiryOmit

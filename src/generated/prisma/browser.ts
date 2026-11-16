@@ -58,6 +58,16 @@ export type PackageItem = Prisma.PackageItemModel
  */
 export type PortfolioItem = Prisma.PortfolioItemModel
 /**
+ * Model PortfolioEvent
+ * 
+ */
+export type PortfolioEvent = Prisma.PortfolioEventModel
+/**
+ * Model PortfolioMedia
+ * 
+ */
+export type PortfolioMedia = Prisma.PortfolioMediaModel
+/**
  * Model TaskTemplate
  * 
  */
