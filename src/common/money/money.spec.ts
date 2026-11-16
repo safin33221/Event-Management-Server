@@ -1,5 +1,6 @@
 import {
   computePercentagePoisha,
+  formatTk,
   sumPoisha,
   toJsonPoisha,
   toPoisha,
@@ -18,6 +19,12 @@ describe('Money (integer poisha)', () => {
     const total = toPoisha(5000000); // Tk 50,000
     const advance = computePercentagePoisha(total, 20n);
     expect(toJsonPoisha(advance)).toBe(1000000); // Tk 10,000
+  });
+
+  it('formats poisha into readable Tk strings without raw poisha', () => {
+    expect(formatTk(5000000n)).toBe('Tk 50,000');
+    expect(formatTk(1000050n)).toBe('Tk 10,000.50');
+    expect(formatTk(0n)).toBe('Tk 0');
   });
 
   it('rejects non-integer numbers', () => {

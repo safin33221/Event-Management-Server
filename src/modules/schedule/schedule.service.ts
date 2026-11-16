@@ -131,13 +131,16 @@ export class ScheduleService {
     return this.prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
         where: { id: bookingId },
-        select: { id: true, status: true },
+        select: { id: true, reference: true, status: true },
       });
       if (!booking) {
         throw new NotFoundException('Booking not found');
       }
       if (booking.status === BookingStatus.CANCELLED) {
-        throw new ConflictException('Cannot schedule sessions on a cancelled booking');
+        throw new ConflictException(`Cannot schedule sessions on cancelled booking ${booking.reference}.`);
+      }
+      if (booking.status === BookingStatus.COMPLETED) {
+        throw new ConflictException(`Cannot schedule new sessions on completed booking ${booking.reference}.`);
       }
 
       const session = await tx.eventSession.create({
@@ -185,6 +188,7 @@ export class ScheduleService {
       const session = await tx.eventSession.findUnique({
         where: { id: sessionId },
         include: {
+          booking: { select: { id: true, reference: true, status: true } },
           reservations: { where: { status: ReservationStatus.RESERVED } },
         },
       });
@@ -192,7 +196,15 @@ export class ScheduleService {
         throw new NotFoundException('Session not found');
       }
       if (session.status === SessionStatus.CANCELLED) {
-        throw new ConflictException('Cannot reschedule a cancelled session');
+        throw new ConflictException('Cannot reschedule a cancelled session.');
+      }
+      if (session.status === SessionStatus.COMPLETED) {
+        throw new ConflictException('Cannot reschedule a session that is already completed.');
+      }
+      if (session.booking.status === BookingStatus.CANCELLED || session.booking.status === BookingStatus.COMPLETED) {
+        throw new ConflictException(
+          `Cannot reschedule sessions for booking ${session.booking.reference} because it is already ${session.booking.status.toLowerCase()}.`,
+        );
       }
 
       const targetResourceIds =
@@ -237,9 +249,18 @@ export class ScheduleService {
     return this.prisma.$transaction(async (tx) => {
       const session = await tx.eventSession.findUnique({
         where: { id: sessionId },
+        include: { booking: { select: { reference: true, status: true } } },
       });
       if (!session) {
         throw new NotFoundException('Session not found');
+      }
+      if (session.status === SessionStatus.CANCELLED) {
+        throw new ConflictException('Session is already cancelled.');
+      }
+      if (session.booking.status === BookingStatus.COMPLETED) {
+        throw new ConflictException(
+          `Cannot cancel a session on completed booking ${session.booking.reference}.`,
+        );
       }
 
       const updated = await tx.eventSession.update({

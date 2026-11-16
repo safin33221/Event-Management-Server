@@ -10,8 +10,11 @@ import {
   AssignmentStatus,
   BookingStatus,
   DeliverableStatus,
+  InquiryStatus,
   PaymentType,
   Prisma,
+  QuoteStatus,
+  QuoteVersionStatus,
   ReservationStatus,
   SessionStatus,
   UserRole,
@@ -19,7 +22,7 @@ import {
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { getPaginationParams } from '../../common/dto/pagination.dto.js';
-import { computeRequiredAdvancePoisha, toJsonPoisha } from '../../common/money/money.js';
+import { computeRequiredAdvancePoisha, formatTk, toJsonPoisha } from '../../common/money/money.js';
 import { toAgencyLocalDate } from '../../common/time/timezone.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { ScheduleService } from '../schedule/schedule.service.js';
@@ -190,6 +193,7 @@ export class BookingsService {
         tx.booking.findUnique({
           where: { id: bookingId },
           include: {
+            quote: { select: { id: true, inquiryId: true } },
             acceptedQuoteVersion: { select: { id: true, status: true } },
           },
         }),
@@ -213,10 +217,12 @@ export class BookingsService {
         });
       }
       if (booking.status === BookingStatus.CONFIRMED) {
-        throw new ConflictException('Booking is already confirmed');
+        throw new ConflictException(`Booking ${booking.reference} is already confirmed.`);
       }
       if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.COMPLETED) {
-        throw new ConflictException(`Cannot confirm booking in status ${booking.status}`);
+        throw new ConflictException(
+          `Cannot confirm booking ${booking.reference} because it is already ${booking.status.toLowerCase()}.`,
+        );
       }
 
       const policyType =
@@ -230,11 +236,16 @@ export class BookingsService {
 
       const ledger = await this.paymentsService.computeLedgerSummaryTx(tx, bookingId);
       const verifiedReceipts = BigInt(ledger.verifiedReceiptsPoisha);
+      const pendingReceipts = BigInt(ledger.pendingReceiptsPoisha);
 
       if (verifiedReceipts < requiredAdvance) {
+        const pendingHint =
+          pendingReceipts > 0n
+            ? ` You have ${formatTk(pendingReceipts, booking.currency)} in unverified pending payments—please verify the receipt first.`
+            : '';
         throw new ConflictException({
           code: 'ADVANCE_REQUIREMENT_NOT_MET',
-          message: `Verified receipts (${verifiedReceipts.toString()} poisha) are below required advance (${requiredAdvance.toString()} poisha)`,
+          message: `Cannot confirm booking yet: verified advance paid (${formatTk(verifiedReceipts, booking.currency)}) is less than the required advance of ${formatTk(requiredAdvance, booking.currency)}.${pendingHint}`,
           requiredAdvancePoisha: toJsonPoisha(requiredAdvance),
           verifiedReceiptsPoisha: ledger.verifiedReceiptsPoisha,
         });
@@ -254,6 +265,57 @@ export class BookingsService {
           code: 'STALE_VERSION',
           message: 'Booking was modified concurrently',
         });
+      }
+
+      // Guarantee Inquiry -> Quote -> Booking pipeline sync on confirmation
+      if (typeof tx.inquiry?.findFirst === 'function') {
+        let linkedInquiryId = booking.quote?.inquiryId ?? null;
+        if (!linkedInquiryId) {
+          const matchingInquiry = await tx.inquiry.findFirst({
+            where: {
+              clientPhone: booking.clientPhone,
+              eventTitle: { equals: booking.eventTitle, mode: 'insensitive' },
+              status: { not: InquiryStatus.CONVERTED },
+            },
+            select: { id: true },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (matchingInquiry) {
+            linkedInquiryId = matchingInquiry.id;
+            await tx.quote.update({
+              where: { id: booking.quoteId },
+              data: { inquiryId: linkedInquiryId, status: QuoteStatus.ACCEPTED },
+            });
+          }
+        }
+        if (linkedInquiryId) {
+          await tx.inquiry.update({
+            where: { id: linkedInquiryId },
+            data: { status: InquiryStatus.CONVERTED },
+          });
+          const siblingQuotes = await tx.quote.findMany({
+            where: {
+              inquiryId: linkedInquiryId,
+              id: { not: booking.quoteId },
+              status: { in: [QuoteStatus.DRAFT, QuoteStatus.SENT] },
+            },
+            select: { id: true },
+          });
+          const siblingIds = siblingQuotes.map((s) => s.id);
+          if (siblingIds.length > 0) {
+            await tx.quoteVersion.updateMany({
+              where: {
+                quoteId: { in: siblingIds },
+                status: { in: [QuoteVersionStatus.DRAFT, QuoteVersionStatus.SENT] },
+              },
+              data: { status: QuoteVersionStatus.SUPERSEDED },
+            });
+            await tx.quote.updateMany({
+              where: { id: { in: siblingIds } },
+              data: { status: QuoteStatus.SUPERSEDED },
+            });
+          }
+        }
       }
 
       const createdSessions = [];
@@ -355,7 +417,12 @@ export class BookingsService {
         });
       }
       if (booking.status === BookingStatus.CANCELLED) {
-        throw new ConflictException('Booking is already cancelled');
+        throw new ConflictException(`Booking ${booking.reference} is already cancelled.`);
+      }
+      if (booking.status === BookingStatus.COMPLETED) {
+        throw new ConflictException(
+          `Cannot cancel booking ${booking.reference} because it is already completed.`,
+        );
       }
 
       const updated = await tx.booking.update({
@@ -380,6 +447,30 @@ export class BookingsService {
         await tx.resourceReservation.updateMany({
           where: { sessionId: { in: sessionIds }, status: ReservationStatus.RESERVED },
           data: { status: ReservationStatus.RELEASED },
+        });
+      }
+
+      if (typeof tx.assignment?.updateMany === 'function') {
+        await tx.assignment.updateMany({
+          where: {
+            bookingId,
+            status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.ACCEPTED] },
+          },
+          data: { status: AssignmentStatus.CANCELLED },
+        });
+      }
+
+      if (typeof tx.paymentEntry?.updateMany === 'function') {
+        await tx.paymentEntry.updateMany({
+          where: {
+            bookingId,
+            type: PaymentType.RECEIPT,
+            verificationState: VerificationState.PENDING,
+          },
+          data: {
+            verificationState: VerificationState.REJECTED,
+            reason: `Auto-rejected on booking cancellation: ${dto.reason.trim()}`,
+          },
         });
       }
 
@@ -418,7 +509,9 @@ export class BookingsService {
         throw new NotFoundException('Booking not found');
       }
       if (booking.status !== BookingStatus.CONFIRMED) {
-        throw new ConflictException('Only confirmed bookings can be marked completed');
+        throw new ConflictException(
+          `Only confirmed bookings can be marked as completed (current status: ${booking.status.replace(/_/g, ' ')}).`,
+        );
       }
 
       const updated = await tx.booking.update({
@@ -607,6 +700,7 @@ export class BookingsService {
         where: {
           type: PaymentType.RECEIPT,
           verificationState: VerificationState.PENDING,
+          booking: { status: { not: BookingStatus.CANCELLED } },
         },
         include: {
           booking: {

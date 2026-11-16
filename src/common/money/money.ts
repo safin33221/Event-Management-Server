@@ -54,3 +54,27 @@ export function computeRequiredAdvancePoisha(
   }
   return computePercentagePoisha(agreedTotalPoisha, policyValue);
 }
+
+/**
+ * Formats integer poisha into a human-readable Taka (Tk) string, never exposing raw poisha in UI errors.
+ * Example: 5000000n -> "Tk 50,000", 1000050n -> "Tk 10,000.50"
+ */
+export function formatTk(
+  valuePoisha: bigint | number,
+  currency = 'BDT',
+): string {
+  const poisha = typeof valuePoisha === 'bigint' ? valuePoisha : BigInt(Math.trunc(valuePoisha));
+  const isNegative = poisha < 0n;
+  const absPoisha = isNegative ? -poisha : poisha;
+  const wholeTaka = absPoisha / 100n;
+  const remainderPoisha = absPoisha % 100n;
+
+  const formattedWhole = Number(wholeTaka).toLocaleString('en-IN');
+  const fractionPart =
+    remainderPoisha > 0n ? `.${remainderPoisha.toString().padStart(2, '0')}` : '';
+  const prefix = currency === 'BDT' ? 'Tk' : currency;
+  const sign = isNegative ? '-' : '';
+
+  return `${sign}${prefix} ${formattedWhole}${fractionPart}`;
+}
+

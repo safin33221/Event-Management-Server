@@ -234,57 +234,89 @@ export async function buildBookingInvoicePdf(
       .strokeColor(borderColor)
       .stroke();
 
-    // Two-column Client & Event / Quote Info Cards
+    // Two-column Client & Event / Quote Info Cards (dynamic height to prevent text overlap)
     const infoTop = dividerY + 14;
     const colGap = 16;
     const colWidth = (contentWidth - colGap) / 2;
+    const innerWidth = colWidth - 24;
+    const rightColX = margin + colWidth + colGap;
 
-    doc.roundedRect(margin, infoTop, colWidth, 82, 4).fillAndStroke(softBg, borderColor);
-    doc.fillColor(mutedColor).font('Helvetica-Bold').fontSize(8);
-    doc.text('BILLED TO CLIENT', margin + 12, infoTop + 10);
-    doc.fillColor(inkColor).font('Helvetica-Bold').fontSize(10.5);
-    doc.text(receipt.booking.clientName, margin + 12, infoTop + 24, { width: colWidth - 24 });
-    doc.fillColor(mutedColor).font('Helvetica').fontSize(9);
-    doc.text(`Phone: ${receipt.booking.clientPhone}`, margin + 12, infoTop + 40, {
-      width: colWidth - 24,
+    const eventTypeLabel = receipt.booking.eventTypeName ?? 'Event Service';
+    const eventDateLabel = formatDateInTimezone(receipt.booking.eventDate, tz);
+    const eventMetaText = `${eventTypeLabel}  •  Date: ${eventDateLabel}`;
+    const quoteMetaText = `Accepted Quote: ${receipt.quote.reference} (v${receipt.quote.versionNumber})`;
+    const confirmedText = receipt.booking.confirmedAt
+      ? `Confirmed: ${formatDateInTimezone(receipt.booking.confirmedAt, tz, true)}`
+      : null;
+
+    doc.font('Helvetica-Bold').fontSize(10.5);
+    const clientNameH = doc.heightOfString(receipt.booking.clientName, { width: innerWidth });
+    const eventTitleH = doc.heightOfString(receipt.booking.eventTitle, { width: innerWidth });
+
+    doc.font('Helvetica').fontSize(9);
+    const phoneH = doc.heightOfString(`Phone: ${receipt.booking.clientPhone}`, {
+      width: innerWidth,
     });
+    const emailH = receipt.booking.clientEmail
+      ? doc.heightOfString(`Email: ${receipt.booking.clientEmail}`, { width: innerWidth })
+      : 0;
+    const eventMetaH = doc.heightOfString(eventMetaText, { width: innerWidth });
+    const quoteMetaH = doc.heightOfString(quoteMetaText, { width: innerWidth });
+    const confirmedH = confirmedText
+      ? doc.heightOfString(confirmedText, { width: innerWidth })
+      : 0;
+
+    const leftBoxHeight =
+      24 + clientNameH + 4 + phoneH + (emailH ? 3 + emailH : 0) + 12;
+    const rightBoxHeight =
+      24 + eventTitleH + 4 + eventMetaH + 3 + quoteMetaH + (confirmedH ? 3 + confirmedH : 0) + 12;
+    const infoBoxHeight = Math.max(82, leftBoxHeight, rightBoxHeight);
+
+    // Left Card: Billed To Client
+    doc.roundedRect(margin, infoTop, colWidth, infoBoxHeight, 4).fillAndStroke(softBg, borderColor);
+    let leftY = infoTop + 10;
+    doc.fillColor(mutedColor).font('Helvetica-Bold').fontSize(8);
+    doc.text('BILLED TO CLIENT', margin + 12, leftY);
+    leftY += 14;
+    doc.fillColor(inkColor).font('Helvetica-Bold').fontSize(10.5);
+    doc.text(receipt.booking.clientName, margin + 12, leftY, { width: innerWidth });
+    leftY += clientNameH + 4;
+    doc.fillColor(mutedColor).font('Helvetica').fontSize(9);
+    doc.text(`Phone: ${receipt.booking.clientPhone}`, margin + 12, leftY, {
+      width: innerWidth,
+    });
+    leftY += phoneH + 3;
     if (receipt.booking.clientEmail) {
-      doc.text(`Email: ${receipt.booking.clientEmail}`, margin + 12, infoTop + 53, {
-        width: colWidth - 24,
+      doc.text(`Email: ${receipt.booking.clientEmail}`, margin + 12, leftY, {
+        width: innerWidth,
       });
     }
 
-    const rightColX = margin + colWidth + colGap;
-    doc.roundedRect(rightColX, infoTop, colWidth, 82, 4).fillAndStroke(softBg, borderColor);
+    // Right Card: Event & Quote Snapshot
+    doc
+      .roundedRect(rightColX, infoTop, colWidth, infoBoxHeight, 4)
+      .fillAndStroke(softBg, borderColor);
+    let rightY = infoTop + 10;
     doc.fillColor(mutedColor).font('Helvetica-Bold').fontSize(8);
-    doc.text('EVENT & QUOTE SNAPSHOT', rightColX + 12, infoTop + 10);
+    doc.text('EVENT & QUOTE SNAPSHOT', rightColX + 12, rightY);
+    rightY += 14;
     doc.fillColor(inkColor).font('Helvetica-Bold').fontSize(10.5);
-    doc.text(receipt.booking.eventTitle, rightColX + 12, infoTop + 24, {
-      width: colWidth - 24,
-      ellipsis: true,
+    doc.text(receipt.booking.eventTitle, rightColX + 12, rightY, {
+      width: innerWidth,
     });
+    rightY += eventTitleH + 4;
     doc.fillColor(mutedColor).font('Helvetica').fontSize(9);
-    const eventTypeLabel = receipt.booking.eventTypeName ?? 'Event Service';
-    const eventDateLabel = formatDateInTimezone(receipt.booking.eventDate, tz);
-    doc.text(`${eventTypeLabel}  •  Date: ${eventDateLabel}`, rightColX + 12, infoTop + 40, {
-      width: colWidth - 24,
+    doc.text(eventMetaText, rightColX + 12, rightY, {
+      width: innerWidth,
     });
-    doc.text(
-      `Accepted Quote: ${receipt.quote.reference} (v${receipt.quote.versionNumber})`,
-      rightColX + 12,
-      infoTop + 53,
-      { width: colWidth - 24 },
-    );
-    if (receipt.booking.confirmedAt) {
-      doc.text(
-        `Confirmed: ${formatDateInTimezone(receipt.booking.confirmedAt, tz, true)}`,
-        rightColX + 12,
-        infoTop + 66,
-        { width: colWidth - 24 },
-      );
+    rightY += eventMetaH + 3;
+    doc.text(quoteMetaText, rightColX + 12, rightY, { width: innerWidth });
+    rightY += quoteMetaH + 3;
+    if (confirmedText) {
+      doc.text(confirmedText, rightColX + 12, rightY, { width: innerWidth });
     }
 
-    doc.y = infoTop + 98;
+    doc.y = infoTop + infoBoxHeight + 16;
 
     // Line Items Table
     ensureSpace(64);

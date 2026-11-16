@@ -1,10 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DeliverableStatus, UserRole } from '../../generated/prisma/client.js';
+import { BookingStatus, DeliverableStatus, UserRole } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import {
   CreateAssignmentDto,
@@ -31,10 +32,15 @@ export class OperationsService {
   async createAssignment(bookingId: string, dto: CreateAssignmentDto) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      select: { id: true },
+      select: { id: true, reference: true, status: true },
     });
     if (!booking) {
       throw new NotFoundException('Booking not found');
+    }
+    if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.COMPLETED) {
+      throw new ConflictException(
+        `Cannot assign new crew tasks to booking ${booking.reference} because it is already ${booking.status.toLowerCase()}.`,
+      );
     }
     if (dto.sessionId) {
       const session = await this.prisma.eventSession.findFirst({
@@ -116,10 +122,15 @@ export class OperationsService {
   async createDeliverable(bookingId: string, dto: CreateDeliverableDto) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      select: { id: true },
+      select: { id: true, reference: true, status: true },
     });
     if (!booking) {
       throw new NotFoundException('Booking not found');
+    }
+    if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.COMPLETED) {
+      throw new ConflictException(
+        `Cannot add new deliverables to booking ${booking.reference} because it is already ${booking.status.toLowerCase()}.`,
+      );
     }
     if (dto.assigneeUserId) {
       await this.assertActiveUser(dto.assigneeUserId);

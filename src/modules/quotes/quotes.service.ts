@@ -12,7 +12,7 @@ import {
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { getPaginationParams } from '../../common/dto/pagination.dto.js';
-import { sumPoisha, toJsonPoisha, toPoisha } from '../../common/money/money.js';
+import { formatTk, sumPoisha, toJsonPoisha, toPoisha } from '../../common/money/money.js';
 import {
   AcceptQuoteDto,
   CreateQuoteDto,
@@ -43,10 +43,20 @@ export class QuotesService {
 
     const subtotalPoisha = sumPoisha(computedItems.map((i) => i.lineTotalPoisha));
     const discountPoisha = toPoisha(discountInput);
+    if (subtotalPoisha <= 0n) {
+      throw new BadRequestException('Quote subtotal must be greater than Tk 0.');
+    }
     if (discountPoisha > subtotalPoisha) {
-      throw new BadRequestException('Discount cannot exceed quote subtotal');
+      throw new BadRequestException(
+        `Discount (${formatTk(discountPoisha)}) cannot exceed quote subtotal (${formatTk(subtotalPoisha)}).`,
+      );
     }
     const totalPoisha = subtotalPoisha - discountPoisha;
+    if (totalPoisha <= 0n) {
+      throw new BadRequestException(
+        `Quote final total must be greater than Tk 0 (Subtotal: ${formatTk(subtotalPoisha)}, Discount: ${formatTk(discountPoisha)}).`,
+      );
+    }
 
     return { computedItems, subtotalPoisha, discountPoisha, totalPoisha };
   }
@@ -131,13 +141,59 @@ export class QuotesService {
 
   async createQuote(currency: string, dto: CreateQuoteDto) {
     let resolvedEventTypeId = dto.eventTypeId ?? null;
-    if (dto.inquiryId) {
+    let resolvedInquiryId = dto.inquiryId ?? null;
+
+    if (!resolvedInquiryId && typeof this.prisma.inquiry?.findFirst === 'function') {
+      const matchingInquiry = await this.prisma.inquiry.findFirst({
+        where: {
+          clientPhone: dto.clientPhone.trim(),
+          eventTitle: { equals: dto.eventTitle.trim(), mode: 'insensitive' },
+          status: { in: [InquiryStatus.NEW, InquiryStatus.QUALIFIED, InquiryStatus.QUOTED] },
+        },
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (matchingInquiry) {
+        resolvedInquiryId = matchingInquiry.id;
+      }
+    }
+
+    if (resolvedInquiryId) {
       const inquiry = await this.prisma.inquiry.findUnique({
-        where: { id: dto.inquiryId },
-        select: { id: true, eventTypeId: true, packageId: true },
+        where: { id: resolvedInquiryId },
+        select: {
+          id: true,
+          reference: true,
+          status: true,
+          eventTypeId: true,
+          packageId: true,
+          quotes: {
+            where: { status: QuoteStatus.ACCEPTED },
+            select: {
+              id: true,
+              reference: true,
+              booking: { select: { id: true, reference: true, status: true } },
+            },
+            take: 1,
+          },
+        },
       });
       if (!inquiry) {
         throw new BadRequestException('Inquiry not found');
+      }
+      if (inquiry.status === InquiryStatus.CLOSED) {
+        throw new ConflictException(
+          `Inquiry ${inquiry.reference} is closed and cannot be quoted.`,
+        );
+      }
+      const acceptedQuote = inquiry.quotes[0];
+      const existingBooking = acceptedQuote?.booking;
+      if (inquiry.status === InquiryStatus.CONVERTED || acceptedQuote) {
+        throw new ConflictException(
+          existingBooking
+            ? `Inquiry ${inquiry.reference} is already converted to booking ${existingBooking.reference} (${existingBooking.status.replace(/_/g, ' ')}) and cannot be quoted again.`
+            : `Inquiry ${inquiry.reference} already has an accepted quote and cannot be quoted again.`,
+        );
       }
       if (!resolvedEventTypeId && inquiry.eventTypeId) {
         resolvedEventTypeId = inquiry.eventTypeId;
@@ -175,10 +231,34 @@ export class QuotesService {
     );
 
     const created = await this.prisma.$transaction(async (tx) => {
+      if (resolvedInquiryId) {
+        const previousOpenQuotes = await tx.quote.findMany({
+          where: {
+            inquiryId: resolvedInquiryId,
+            status: { in: [QuoteStatus.DRAFT, QuoteStatus.SENT] },
+          },
+          select: { id: true },
+        });
+        const prevIds = previousOpenQuotes.map((q) => q.id);
+        if (prevIds.length > 0) {
+          await tx.quoteVersion.updateMany({
+            where: {
+              quoteId: { in: prevIds },
+              status: { in: [QuoteVersionStatus.DRAFT, QuoteVersionStatus.SENT] },
+            },
+            data: { status: QuoteVersionStatus.SUPERSEDED },
+          });
+          await tx.quote.updateMany({
+            where: { id: { in: prevIds } },
+            data: { status: QuoteStatus.SUPERSEDED },
+          });
+        }
+      }
+
       const reference = await this.prisma.nextReference(tx, 'QUO');
       const quote = await tx.quote.create({
         data: {
-          inquiryId: dto.inquiryId ?? null,
+          inquiryId: resolvedInquiryId,
           reference,
           eventTypeId: resolvedEventTypeId,
           eventTitle: dto.eventTitle.trim(),
@@ -215,9 +295,9 @@ export class QuotesService {
         data: { currentVersionId: version.id },
       });
 
-      if (dto.inquiryId) {
+      if (resolvedInquiryId) {
         await tx.inquiry.update({
-          where: { id: dto.inquiryId },
+          where: { id: resolvedInquiryId },
           data: { status: InquiryStatus.QUOTED },
         });
       }
@@ -234,13 +314,23 @@ export class QuotesService {
   async createVersion(quoteId: string, dto: CreateQuoteVersionDto) {
     const quote = await this.prisma.quote.findUnique({
       where: { id: quoteId },
-      include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
+      include: {
+        booking: { select: { id: true, reference: true, status: true } },
+        versions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+      },
     });
     if (!quote) {
       throw new NotFoundException('Quote not found');
     }
+    if (quote.status === QuoteStatus.ACCEPTED || quote.booking) {
+      throw new ConflictException(
+        quote.booking
+          ? `Quote ${quote.reference} is already linked to booking ${quote.booking.reference} (${quote.booking.status.replace(/_/g, ' ')}) and cannot be revised.`
+          : `Quote ${quote.reference} has already been accepted and cannot be revised.`,
+      );
+    }
     if (quote.status === QuoteStatus.CANCELLED || quote.status === QuoteStatus.EXPIRED) {
-      throw new ConflictException(`Cannot revise a quote in status ${quote.status}`);
+      throw new ConflictException(`Cannot revise quote ${quote.reference} because it is ${quote.status.toLowerCase()}.`);
     }
 
     await this.validateItemReferences(dto.items);
@@ -295,9 +385,20 @@ export class QuotesService {
   async sendQuote(quoteId: string) {
     const quote = await this.prisma.quote.findUnique({
       where: { id: quoteId },
+      include: { booking: { select: { reference: true, status: true } } },
     });
     if (!quote || !quote.currentVersionId) {
       throw new NotFoundException('Quote not found');
+    }
+    if (quote.status === QuoteStatus.ACCEPTED || quote.booking) {
+      throw new ConflictException(
+        `Quote ${quote.reference} has already been accepted${quote.booking ? ` for booking ${quote.booking.reference}` : ''} and cannot be sent again.`,
+      );
+    }
+    if (quote.status === QuoteStatus.CANCELLED || quote.status === QuoteStatus.EXPIRED) {
+      throw new ConflictException(
+        `Cannot send quote ${quote.reference} because it is ${quote.status.toLowerCase()}.`,
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -320,8 +421,15 @@ export class QuotesService {
     if (!quote) {
       throw new NotFoundException('Quote not found');
     }
+    if (quote.status === QuoteStatus.ACCEPTED || quote.booking) {
+      throw new ConflictException(
+        `Quote ${quote.reference} has already been accepted${quote.booking ? ` for booking ${quote.booking.reference} (${quote.booking.status.replace(/_/g, ' ')})` : ''}.`,
+      );
+    }
     if (quote.status === QuoteStatus.CANCELLED || quote.status === QuoteStatus.EXPIRED) {
-      throw new ConflictException(`Cannot accept quote in status ${quote.status}`);
+      throw new ConflictException(
+        `Cannot accept quote ${quote.reference} because it is ${quote.status.toLowerCase()}.`,
+      );
     }
 
     const targetVersionId = dto.versionId ?? quote.currentVersionId;
@@ -360,19 +468,59 @@ export class QuotesService {
         include: { items: { orderBy: { sortOrder: 'asc' } } },
       });
 
+      let linkedInquiryId = quote.inquiryId;
+      if (!linkedInquiryId && typeof tx.inquiry?.findFirst === 'function') {
+        const matchingInquiry = await tx.inquiry.findFirst({
+          where: {
+            clientPhone: quote.clientPhone,
+            eventTitle: { equals: quote.eventTitle, mode: 'insensitive' },
+            status: { not: InquiryStatus.CONVERTED },
+          },
+          select: { id: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (matchingInquiry) {
+          linkedInquiryId = matchingInquiry.id;
+        }
+      }
+
       await tx.quote.update({
         where: { id: quoteId },
         data: {
           status: QuoteStatus.ACCEPTED,
           currentVersionId: version.id,
+          ...(linkedInquiryId ? { inquiryId: linkedInquiryId } : {}),
         },
       });
 
-      if (quote.inquiryId) {
+      if (linkedInquiryId) {
         await tx.inquiry.update({
-          where: { id: quote.inquiryId },
+          where: { id: linkedInquiryId },
           data: { status: InquiryStatus.CONVERTED },
         });
+        // Supersede any sibling draft/sent quotes for the same inquiry
+        const siblingQuotes = await tx.quote.findMany({
+          where: {
+            inquiryId: linkedInquiryId,
+            id: { not: quoteId },
+            status: { in: [QuoteStatus.DRAFT, QuoteStatus.SENT] },
+          },
+          select: { id: true },
+        });
+        const siblingIds = siblingQuotes.map((s) => s.id);
+        if (siblingIds.length > 0) {
+          await tx.quoteVersion.updateMany({
+            where: {
+              quoteId: { in: siblingIds },
+              status: { in: [QuoteVersionStatus.DRAFT, QuoteVersionStatus.SENT] },
+            },
+            data: { status: QuoteVersionStatus.SUPERSEDED },
+          });
+          await tx.quote.updateMany({
+            where: { id: { in: siblingIds } },
+            data: { status: QuoteStatus.SUPERSEDED },
+          });
+        }
       }
 
       let booking;
@@ -443,6 +591,8 @@ export class QuotesService {
       this.prisma.quote.findMany({
         where,
         include: {
+          inquiry: { select: { id: true, reference: true, status: true } },
+          booking: { select: { id: true, reference: true, status: true } },
           versions: {
             include: { items: { orderBy: { sortOrder: 'asc' } } },
             orderBy: { versionNumber: 'desc' },
@@ -468,6 +618,8 @@ export class QuotesService {
     const quote = await this.prisma.quote.findUnique({
       where: { id },
       include: {
+        inquiry: { select: { id: true, reference: true, status: true } },
+        booking: { select: { id: true, reference: true, status: true } },
         versions: {
           include: { items: { orderBy: { sortOrder: 'asc' } } },
           orderBy: { versionNumber: 'desc' },

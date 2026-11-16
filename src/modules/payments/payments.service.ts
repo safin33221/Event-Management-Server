@@ -8,6 +8,7 @@ import {
   AdjustmentStatus,
   AdjustmentType,
   AdvancePolicyType,
+  BookingStatus,
   PaymentEntry,
   PaymentType,
   Prisma,
@@ -17,6 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { hashIdempotencyPayload } from '../../common/crypto/hash.js';
 import {
   computeRequiredAdvancePoisha,
+  formatTk,
   sumPoisha,
   toJsonPoisha,
   toPoisha,
@@ -216,10 +218,15 @@ export class PaymentsService {
     return this.prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
         where: { id: bookingId },
-        select: { id: true, currency: true },
+        select: { id: true, reference: true, currency: true, status: true },
       });
       if (!booking) {
         throw new NotFoundException('Booking not found');
+      }
+      if (booking.status === BookingStatus.CANCELLED) {
+        throw new ConflictException(
+          `Cannot record a payment on cancelled booking ${booking.reference}.`,
+        );
       }
 
       if (idempotencyKey) {
@@ -242,6 +249,30 @@ export class PaymentsService {
             idempotentReplay: true,
           };
         }
+      }
+
+      const ledger = await this.computeLedgerSummaryTx(tx, bookingId);
+      const outstandingDue = BigInt(ledger.outstandingDuePoisha);
+      const pendingReceipts = BigInt(ledger.pendingReceiptsPoisha);
+      const paymentAmount = toPoisha(dto.amountPoisha);
+
+      if (paymentAmount <= 0n) {
+        throw new BadRequestException('Payment amount must be greater than Tk 0.');
+      }
+      if (outstandingDue <= 0n) {
+        throw new BadRequestException(
+          `Booking ${booking.reference} is already fully paid (${formatTk(ledger.effectiveAgreedChargePoisha, booking.currency)}). No additional payment can be recorded.`,
+        );
+      }
+      if (paymentAmount > outstandingDue) {
+        throw new BadRequestException(
+          `Payment of ${formatTk(paymentAmount, booking.currency)} exceeds the remaining due balance of ${formatTk(outstandingDue, booking.currency)} (Total price: ${formatTk(ledger.effectiveAgreedChargePoisha, booking.currency)}, Paid: ${formatTk(ledger.verifiedReceiptsPoisha, booking.currency)}).`,
+        );
+      }
+      if (paymentAmount + pendingReceipts > outstandingDue) {
+        throw new BadRequestException(
+          `Payment of ${formatTk(paymentAmount, booking.currency)} plus unverified pending payments (${formatTk(pendingReceipts, booking.currency)}) would exceed the remaining due balance of ${formatTk(outstandingDue, booking.currency)}. Please verify or reject the pending payment first.`,
+        );
       }
 
       const entry = await tx.paymentEntry.create({
@@ -292,8 +323,13 @@ export class PaymentsService {
       }
       const booking = await tx.booking.findUnique({
         where: { id: existing.bookingId },
-        select: { status: true },
+        select: { reference: true, status: true, currency: true },
       });
+      if (booking?.status === BookingStatus.CANCELLED) {
+        throw new ConflictException(
+          `Cannot verify a payment for cancelled booking ${booking.reference}.`,
+        );
+      }
       if (existing.verificationState === VerificationState.VERIFIED) {
         return {
           entry: this.serializeEntry(existing),
@@ -302,7 +338,15 @@ export class PaymentsService {
         };
       }
       if (existing.verificationState === VerificationState.REJECTED) {
-        throw new ConflictException('Cannot verify a rejected payment entry');
+        throw new ConflictException('Cannot verify a rejected payment entry.');
+      }
+
+      const ledgerBefore = await this.computeLedgerSummaryTx(tx, existing.bookingId);
+      const outstandingDue = BigInt(ledgerBefore.outstandingDuePoisha);
+      if (existing.amountPoisha > outstandingDue) {
+        throw new ConflictException(
+          `Cannot verify payment of ${formatTk(existing.amountPoisha, existing.currency)} because it exceeds the remaining due balance of ${formatTk(outstandingDue, existing.currency)}.`,
+        );
       }
 
       const updated = await tx.paymentEntry.update({
@@ -436,7 +480,9 @@ export class PaymentsService {
         BigInt(ledgerBefore.verifiedReceiptsPoisha) - BigInt(ledgerBefore.completedRefundsPoisha);
       const refundAmount = toPoisha(dto.amountPoisha);
       if (refundAmount > netPaid) {
-        throw new BadRequestException('Refund amount exceeds net verified receipts');
+        throw new BadRequestException(
+          `Refund of ${formatTk(refundAmount, booking.currency)} exceeds the net verified paid amount of ${formatTk(netPaid, booking.currency)}.`,
+        );
       }
 
       const entry = await tx.paymentEntry.create({
