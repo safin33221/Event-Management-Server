@@ -186,18 +186,27 @@ describe('Portfolio Showcase Events & Cloudinary Upload Workflow', () => {
             return store[store.length - 1] ?? null;
           },
           create: async ({ data }: { data: Record<string, unknown> }) => {
-            const item = {
+            const item: Record<string, unknown> & {
+              id: string;
+              createdAt: Date;
+              updatedAt: Date;
+            } = {
               id: `media-${store.length + 1}`,
               createdAt: new Date(),
               updatedAt: new Date(),
-              ...(data as never),
+              ...data,
             };
-            store.push(item);
+            store.push(item as (typeof store)[number]);
             return item;
           },
           update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
             const idx = store.findIndex((m) => m.id === where.id);
-            store[idx] = { ...store[idx], ...(data as never), updatedAt: new Date() };
+            const current = (store[idx] ?? {}) as Record<string, unknown>;
+            store[idx] = {
+              ...current,
+              ...data,
+              updatedAt: new Date(),
+            } as (typeof store)[number];
             return store[idx];
           },
         },
@@ -279,7 +288,16 @@ describe('Portfolio Showcase Events & Cloudinary Upload Workflow', () => {
         updatedAt: Date;
       }> = [];
 
-      const mockPrisma = {
+      const mockPrisma: {
+        portfolioEvent: {
+          findUnique: () => Promise<Record<string, unknown>>;
+          update: (args: { data: { status: string; publishedAt?: Date } }) => Promise<Record<string, unknown>>;
+          findMany: (args: { where?: { status?: string } }) => Promise<unknown[]>;
+          count?: (args: { where?: { status?: string } }) => Promise<number>;
+          findFirst?: (args: { where?: { status?: string } }) => Promise<Record<string, unknown> | null>;
+        };
+        $transaction?: (cb: (tx: never) => Promise<unknown>) => Promise<unknown>;
+      } = {
         portfolioEvent: {
           findUnique: async () => ({
             id: 'ev-1',
@@ -318,26 +336,26 @@ describe('Portfolio Showcase Events & Cloudinary Upload Workflow', () => {
               media: currentMedia,
             };
           },
-          findMany: async ({ where }: { where: { status?: string } }) => {
-            if (where.status === 'PUBLISHED' && currentStatus !== 'PUBLISHED') {
+          findMany: async ({ where }: { where?: { status?: string } }) => {
+            if (where?.status === 'PUBLISHED' && currentStatus !== 'PUBLISHED') {
               return [];
             }
             return [];
           },
-          count: async ({ where }: { where: { status?: string } }) => {
-            if (where.status === 'PUBLISHED' && currentStatus !== 'PUBLISHED') {
+          count: async ({ where }: { where?: { status?: string } }) => {
+            if (where?.status === 'PUBLISHED' && currentStatus !== 'PUBLISHED') {
               return 0;
             }
             return 0;
           },
-          findFirst: async ({ where }: { where: { status?: string } }) => {
-            if (where.status === 'PUBLISHED' && currentStatus !== 'PUBLISHED') {
+          findFirst: async ({ where }: { where?: { status?: string } }) => {
+            if (where?.status === 'PUBLISHED' && currentStatus !== 'PUBLISHED') {
               return null;
             }
             return null;
           },
         },
-        $transaction: async (cb: (tx: typeof mockPrisma) => Promise<unknown>) => cb(mockPrisma),
+        $transaction: async (cb: (tx: never) => Promise<unknown>) => cb(mockPrisma as never),
       };
 
       const service = new CatalogService(mockPrisma as never);

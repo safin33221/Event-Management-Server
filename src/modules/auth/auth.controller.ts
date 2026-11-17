@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { CurrentActor, Public } from '../../common/guards/auth.guard.js';
 import type { RequestActor } from '../../common/guards/auth.guard.js';
+import { RateLimit } from '../../common/guards/rate-limit.guard.js';
 import { AuthService } from './auth.service.js';
 import { LoginDto } from './dto/login.dto.js';
 
@@ -9,6 +10,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @RateLimit(12, 60_000)
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);

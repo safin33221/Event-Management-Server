@@ -45,5 +45,11 @@ describe('iCalendar & Google Calendar helper', () => {
     expect(verifyCalendarFeedToken(token, secret)).toBe(true);
     expect(verifyCalendarFeedToken('invalid-token', secret)).toBe(false);
     expect(verifyCalendarFeedToken(token, 'different-secret-with-sufficient-len')).toBe(false);
+
+    const rotatedToken = signCalendarFeedToken(secret, 'feed-key-v2-abc');
+    expect(rotatedToken).not.toBe(token);
+    expect(verifyCalendarFeedToken(rotatedToken, secret, 'feed-key-v2-abc')).toBe(true);
+    expect(verifyCalendarFeedToken(token, secret, 'feed-key-v2-abc')).toBe(false);
+    expect(verifyCalendarFeedToken(rotatedToken, secret, 'feed-key-v3-xyz')).toBe(false);
   });
 });

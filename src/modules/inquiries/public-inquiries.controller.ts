@@ -1,5 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { Public } from '../../common/guards/auth.guard.js';
+import { RateLimit } from '../../common/guards/rate-limit.guard.js';
 import { CreateInquiryDto } from './dto/inquiries.dto.js';
 import { InquiriesService } from './inquiries.service.js';
 
@@ -8,6 +9,7 @@ import { InquiriesService } from './inquiries.service.js';
 export class PublicInquiriesController {
   constructor(private readonly inquiriesService: InquiriesService) {}
 
+  @RateLimit(10, 60_000)
   @Post()
   async submitPublicInquiry(@Body() dto: CreateInquiryDto) {
     const created = await this.inquiriesService.createInquiry(dto, 'PUBLIC');

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -548,6 +549,14 @@ export class ScheduleService {
     return { filename: 'studio-schedule.ics', ics };
   }
 
+  private extractCalendarFeedKey(policies: Prisma.JsonValue | null | undefined): string | null {
+    if (!policies || typeof policies !== 'object' || Array.isArray(policies)) {
+      return null;
+    }
+    const raw = (policies as Record<string, unknown>).calendarFeedKey;
+    return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null;
+  }
+
   async getSubscriptionInfo() {
     const secret = process.env.AUTH_SECRET;
     if (!secret || secret.length < 16) {
@@ -555,9 +564,10 @@ export class ScheduleService {
     }
     const studio = await this.prisma.studioSettings.findUnique({
       where: { id: 'default' },
-      select: { name: true, timezone: true },
+      select: { name: true, timezone: true, operationalPolicies: true },
     });
-    const token = signCalendarFeedToken(secret);
+    const feedKey = this.extractCalendarFeedKey(studio?.operationalPolicies);
+    const token = signCalendarFeedToken(secret, feedKey);
     return {
       studioName: studio?.name || 'Softilo Event Management',
       timezone: studio?.timezone || 'Asia/Dhaka',
@@ -565,9 +575,49 @@ export class ScheduleService {
     };
   }
 
+  async rotateSubscriptionToken() {
+    const secret = process.env.AUTH_SECRET;
+    if (!secret || secret.length < 16) {
+      throw new BadRequestException('AUTH_SECRET must be configured for calendar subscriptions');
+    }
+    const studio = await this.prisma.studioSettings.findUnique({
+      where: { id: 'default' },
+      select: { name: true, timezone: true, operationalPolicies: true },
+    });
+    const existingPolicies =
+      studio?.operationalPolicies &&
+      typeof studio.operationalPolicies === 'object' &&
+      !Array.isArray(studio.operationalPolicies)
+        ? (studio.operationalPolicies as Record<string, unknown>)
+        : {};
+    const nextFeedKey = randomBytes(16).toString('hex');
+    const updated = await this.prisma.studioSettings.upsert({
+      where: { id: 'default' },
+      create: {
+        id: 'default',
+        operationalPolicies: { ...existingPolicies, calendarFeedKey: nextFeedKey } as Prisma.InputJsonValue,
+      },
+      update: {
+        operationalPolicies: { ...existingPolicies, calendarFeedKey: nextFeedKey } as Prisma.InputJsonValue,
+      },
+      select: { name: true, timezone: true },
+    });
+    const token = signCalendarFeedToken(secret, nextFeedKey);
+    return {
+      studioName: updated.name || 'Softilo Event Management',
+      timezone: updated.timezone || 'Asia/Dhaka',
+      feedPath: `/public/calendar/feed.ics?token=${encodeURIComponent(token)}`,
+    };
+  }
+
   async getPublicFeedIcs(token: string | undefined) {
     const secret = process.env.AUTH_SECRET ?? '';
-    if (!verifyCalendarFeedToken(token, secret)) {
+    const studio = await this.prisma.studioSettings.findUnique({
+      where: { id: 'default' },
+      select: { operationalPolicies: true },
+    });
+    const feedKey = this.extractCalendarFeedKey(studio?.operationalPolicies);
+    if (!verifyCalendarFeedToken(token, secret, feedKey)) {
       throw new UnauthorizedException('Invalid or expired calendar subscription token');
     }
     // Publicly subscribable feed omits client phone/email/notes for privacy

@@ -106,6 +106,12 @@ export class ScheduleController {
     return this.scheduleService.getSubscriptionInfo();
   }
 
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('calendar/subscription/rotate')
+  rotateCalendarSubscription() {
+    return this.scheduleService.rotateSubscriptionToken();
+  }
+
   @Roles(UserRole.OWNER, UserRole.COORDINATOR, UserRole.ACCOUNTANT, UserRole.STAFF)
   @Get('calendar.ics')
   async downloadStudioCalendarIcs(

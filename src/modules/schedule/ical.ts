@@ -97,15 +97,24 @@ export function buildIcsCalendar(options: IcsFeedOptions): string {
 
 const FEED_CONTEXT = 'softilo-google-calendar-feed-v1';
 
-export function signCalendarFeedToken(secret: string): string {
-  return createHmac('sha256', secret).update(FEED_CONTEXT).digest('base64url');
+function buildFeedContext(feedKey?: string | null): string {
+  const trimmed = feedKey?.trim();
+  return trimmed ? `softilo-google-calendar-feed-v2:${trimmed}` : FEED_CONTEXT;
 }
 
-export function verifyCalendarFeedToken(token: string | undefined, secret: string): boolean {
+export function signCalendarFeedToken(secret: string, feedKey?: string | null): string {
+  return createHmac('sha256', secret).update(buildFeedContext(feedKey)).digest('base64url');
+}
+
+export function verifyCalendarFeedToken(
+  token: string | undefined,
+  secret: string,
+  feedKey?: string | null,
+): boolean {
   if (!token || !secret || secret.length < 16) {
     return false;
   }
-  const expected = signCalendarFeedToken(secret);
+  const expected = signCalendarFeedToken(secret, feedKey);
   const actualBuf = Buffer.from(token.trim(), 'utf8');
   const expectedBuf = Buffer.from(expected, 'utf8');
   if (actualBuf.length !== expectedBuf.length) {
