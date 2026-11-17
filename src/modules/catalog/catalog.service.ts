@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  BookingStatus,
   PortfolioEventStatus,
   PortfolioMediaStatus,
   PortfolioMediaType,
@@ -552,6 +553,7 @@ export class CatalogService {
   async listAdminPortfolioEvents(query: ListPortfolioEventsQueryDto) {
     const { page, limit, skip } = getPaginationParams(query);
     const where: Prisma.PortfolioEventWhereInput = {
+      slug: { not: 'studio-media-gallery' },
       status: query.status,
       eventTypeId: query.eventTypeId,
     };
@@ -923,15 +925,21 @@ export class CatalogService {
         });
       }
 
-      return existing;
+      return { existing, remainingRefs: 0 };
     });
 
-    // Best-effort cleanup in Cloudinary so deleted media does not remain orphaned
-    void destroyCloudinaryAsset(
-      loadCloudinaryConfig(),
-      deleted.publicId,
-      deleted.resourceType as 'IMAGE' | 'VIDEO',
-    );
+    const remainingRefs = await this.prisma.portfolioMedia.count({
+      where: { publicId: deleted.existing.publicId },
+    });
+
+    // Best-effort cleanup in Cloudinary only if no other portfolio/gallery item references this asset
+    if (remainingRefs === 0) {
+      void destroyCloudinaryAsset(
+        loadCloudinaryConfig(),
+        deleted.existing.publicId,
+        deleted.existing.resourceType as 'IMAGE' | 'VIDEO',
+      );
+    }
 
     return { deletedMediaId: mediaId };
   }
@@ -1034,6 +1042,7 @@ export class CatalogService {
   async listPublicPortfolioEvents(query: PaginationQueryDto) {
     const { page, limit, skip } = getPaginationParams(query);
     const where: Prisma.PortfolioEventWhereInput = {
+      slug: { not: 'studio-media-gallery' },
       status: PortfolioEventStatus.PUBLISHED,
       coverMedia: {
         is: {
@@ -1145,6 +1154,125 @@ export class CatalogService {
         throw new ConflictException('Unable to initialize studio media gallery container.');
       }
       return concurrent.id;
+    }
+  }
+
+  private buildBookingPortfolioSlug(title: string, reference: string): string {
+    const refSuffix = reference.trim().toLowerCase();
+    const baseTitle = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (!baseTitle) {
+      return refSuffix.slice(0, 80);
+    }
+    const maxTitleLen = Math.max(8, 80 - refSuffix.length - 1);
+    const trimmedTitle = baseTitle.slice(0, maxTitleLen).replace(/-+$/g, '');
+    return trimmedTitle ? `${trimmedTitle}-${refSuffix}` : refSuffix.slice(0, 80);
+  }
+
+  private async findExistingBookingPortfolio(reference: string) {
+    const refSuffix = reference.trim().toLowerCase();
+    return this.prisma.portfolioEvent.findFirst({
+      where: {
+        OR: [{ slug: refSuffix }, { slug: { endsWith: `-${refSuffix}` } }],
+      },
+      include: {
+        eventType: { select: { id: true, name: true, slug: true } },
+        coverMedia: true,
+        media: {
+          orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
+    });
+  }
+
+  async getPortfolioEventByBooking(bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, reference: true },
+    });
+    if (!booking) {
+      throw new NotFoundException(`Booking "${bookingId}" not found.`);
+    }
+
+    const existing = await this.findExistingBookingPortfolio(booking.reference);
+    return {
+      event: existing ? this.serializePortfolioEvent(existing) : null,
+    };
+  }
+
+  async createPortfolioEventFromBooking(bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        sessions: {
+          orderBy: { startAt: 'asc' },
+          take: 1,
+          select: { location: true },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking "${bookingId}" not found.`);
+    }
+
+    const existing = await this.findExistingBookingPortfolio(booking.reference);
+    if (existing) {
+      return {
+        event: this.serializePortfolioEvent(existing),
+        created: false,
+      };
+    }
+
+    if (booking.status !== BookingStatus.COMPLETED) {
+      throw new BadRequestException(
+        'Digital portfolio can only be created after the booking event is marked COMPLETED.',
+      );
+    }
+
+    const slug = this.buildBookingPortfolioSlug(booking.eventTitle, booking.reference);
+    const primaryLocation = booking.sessions?.[0]?.location?.trim() || null;
+
+    try {
+      const created = await this.prisma.portfolioEvent.create({
+        data: {
+          title: booking.eventTitle.trim(),
+          slug,
+          eventDate: booking.eventDate,
+          eventTypeId: booking.eventTypeId,
+          location: primaryLocation,
+          description: `Curated digital portfolio for ${booking.clientName} (${booking.reference}).`,
+          status: PortfolioEventStatus.DRAFT,
+        },
+        include: {
+          eventType: { select: { id: true, name: true, slug: true } },
+          coverMedia: true,
+          media: {
+            orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+          },
+        },
+      });
+
+      return {
+        event: this.serializePortfolioEvent(created),
+        created: true,
+      };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const concurrent = await this.findExistingBookingPortfolio(booking.reference);
+        if (concurrent) {
+          return {
+            event: this.serializePortfolioEvent(concurrent),
+            created: false,
+          };
+        }
+      }
+      throw error;
     }
   }
 

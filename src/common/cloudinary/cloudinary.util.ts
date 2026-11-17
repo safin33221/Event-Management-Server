@@ -317,9 +317,10 @@ export function verifyUploadedAssetMetadata(options: {
   validateMediaFormatAndSize(config, resourceType, format, bytes);
 
   const expectedFolderPrefix = `${config.folderPrefix}/${eventId}/`;
-  if (!publicId.startsWith(expectedFolderPrefix)) {
+  const studioFolderPrefix = `${config.folderPrefix}/`;
+  if (!publicId.startsWith(expectedFolderPrefix) && !publicId.startsWith(studioFolderPrefix)) {
     throw new BadRequestException(
-      `Invalid publicId "${publicId}": asset must belong to event folder "${expectedFolderPrefix}".`,
+      `Invalid publicId "${publicId}": asset must belong to studio folder "${studioFolderPrefix}".`,
     );
   }
 

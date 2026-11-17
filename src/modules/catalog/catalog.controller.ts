@@ -132,6 +132,18 @@ export class CatalogController {
   }
 
   @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Get('portfolio-events/by-booking/:bookingId')
+  getPortfolioEventByBooking(@Param('bookingId') bookingId: string) {
+    return this.catalogService.getPortfolioEventByBooking(bookingId);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('portfolio-events/from-booking/:bookingId')
+  createPortfolioEventFromBooking(@Param('bookingId') bookingId: string) {
+    return this.catalogService.createPortfolioEventFromBooking(bookingId);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
   @Get('portfolio-events/:id')
   getAdminPortfolioEvent(@Param('id') id: string) {
     return this.catalogService.getAdminPortfolioEvent(id);
