@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { UserRole } from '../../generated/prisma/client.js';
 import { CurrentActor, Roles } from '../../common/guards/auth.guard.js';
 import type { RequestActor } from '../../common/guards/auth.guard.js';
@@ -67,5 +67,17 @@ export class OperationsController {
     @Body() dto: DeliverDeliverableDto,
   ) {
     return this.operationsService.deliverDeliverable(id, actor.userId, dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Post('bookings/:bookingId/deliverables/sync-quote')
+  syncDeliverablesFromQuote(@Param('bookingId') bookingId: string) {
+    return this.operationsService.syncDeliverablesFromQuote(bookingId);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Delete('deliverables/:id')
+  deleteDeliverable(@Param('id') id: string) {
+    return this.operationsService.deleteDeliverable(id);
   }
 }

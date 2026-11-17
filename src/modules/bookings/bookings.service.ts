@@ -29,6 +29,10 @@ import { ScheduleService } from '../schedule/schedule.service.js';
 import { buildBookingInvoicePdf } from './invoice-pdf.js';
 import { DEFAULT_STUDIO_ID, StudioService } from '../studio/studio.service.js';
 import {
+  provisionDeliverablesFromQuoteAndTemplatesTx,
+  QuoteDeliverableItemInput,
+} from './deliverable-provisioning.js';
+import {
   CancelBookingDto,
   ConfirmBookingDto,
   ListBookingsQueryDto,
@@ -56,47 +60,22 @@ export class BookingsService {
       actorId: string;
       createdSessionIds: string[];
       studioTimezone: string;
+      quoteItems?: QuoteDeliverableItemInput[];
       autoProvisionDeliverables?: boolean;
       autoProvisionTasks?: boolean;
     },
   ) {
     const baseDate = params.eventDate ?? new Date();
-    const createdDeliverables = [];
+    let createdDeliverables: Array<{ id: string }> = [];
     const createdAssignments = [];
 
     if (params.autoProvisionDeliverables !== false) {
-      const [labelTemplates, existingDeliverables] = await Promise.all([
-        tx.deliverableLabel.findMany({
-          where: {
-            isActive: true,
-            eventTypeId: params.eventTypeId ?? null,
-          },
-          orderBy: { defaultDueDays: 'asc' },
-        }),
-        tx.deliverable.findMany({
-          where: { bookingId: params.bookingId },
-          select: { label: true },
-        }),
-      ]);
-
-      const existingLabels = new Set(
-        existingDeliverables.map((d) => d.label.trim().toLowerCase()),
-      );
-
-      for (const tpl of labelTemplates) {
-        if (existingLabels.has(tpl.label.trim().toLowerCase())) {
-          continue;
-        }
-        const created = await tx.deliverable.create({
-          data: {
-            bookingId: params.bookingId,
-            label: tpl.label.trim(),
-            dueAt: this.addDaysUtc(baseDate, tpl.defaultDueDays),
-            notes: `Auto-created from template (+${tpl.defaultDueDays}d)`,
-          },
-        });
-        createdDeliverables.push(created);
-      }
+      createdDeliverables = await provisionDeliverablesFromQuoteAndTemplatesTx(tx, {
+        bookingId: params.bookingId,
+        eventTypeId: params.eventTypeId,
+        eventDate: params.eventDate,
+        quoteItems: params.quoteItems,
+      });
     }
 
     if (params.autoProvisionTasks !== false) {
@@ -194,7 +173,16 @@ export class BookingsService {
           where: { id: bookingId },
           include: {
             quote: { select: { id: true, inquiryId: true } },
-            acceptedQuoteVersion: { select: { id: true, status: true } },
+            acceptedQuoteVersion: {
+              select: {
+                id: true,
+                status: true,
+                items: {
+                  orderBy: { sortOrder: 'asc' },
+                  select: { description: true, quantity: true },
+                },
+              },
+            },
           },
         }),
         tx.studioSettings.findUnique({
@@ -369,6 +357,7 @@ export class BookingsService {
           actorId,
           createdSessionIds: createdSessions.map((s) => s.id),
           studioTimezone,
+          quoteItems: booking.acceptedQuoteVersion?.items ?? [],
           autoProvisionDeliverables: dto.autoProvisionDeliverables,
           autoProvisionTasks: dto.autoProvisionTasks,
         });
@@ -623,6 +612,22 @@ export class BookingsService {
       if (!booking) {
         throw new NotFoundException('Booking not found');
       }
+
+      if (
+        booking.deliverables.length === 0 &&
+        booking.status !== BookingStatus.CANCELLED
+      ) {
+        const autoSeeded = await provisionDeliverablesFromQuoteAndTemplatesTx(tx, {
+          bookingId: booking.id,
+          eventTypeId: booking.eventTypeId,
+          eventDate: booking.eventDate,
+          quoteItems: booking.acceptedQuoteVersion?.items ?? [],
+        });
+        if (autoSeeded.length > 0) {
+          booking.deliverables = autoSeeded;
+        }
+      }
+
       const studioTimezone = studio?.timezone || 'Asia/Dhaka';
       const ledger = await this.paymentsService.computeLedgerSummaryTx(tx, bookingId);
 

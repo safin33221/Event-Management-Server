@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { BookingStatus, DeliverableStatus, UserRole } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { provisionDeliverablesFromQuoteAndTemplatesTx } from '../bookings/deliverable-provisioning.js';
 import {
   CreateAssignmentDto,
   CreateDeliverableDto,
@@ -229,5 +230,77 @@ export class OperationsService {
 
       return updated;
     });
+  }
+
+  async syncDeliverablesFromQuote(bookingId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          acceptedQuoteVersion: {
+            include: {
+              items: {
+                orderBy: { sortOrder: 'asc' },
+                select: { description: true, quantity: true },
+              },
+            },
+          },
+        },
+      });
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+      if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.COMPLETED) {
+        throw new ConflictException(
+          `Cannot sync deliverables for booking ${booking.reference} because it is already ${booking.status.toLowerCase()}.`,
+        );
+      }
+
+      const created = await provisionDeliverablesFromQuoteAndTemplatesTx(tx, {
+        bookingId: booking.id,
+        eventTypeId: booking.eventTypeId,
+        eventDate: booking.eventDate,
+        quoteItems: booking.acceptedQuoteVersion?.items ?? [],
+      });
+
+      const deliverables = await tx.deliverable.findMany({
+        where: { bookingId },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      return {
+        createdCount: created.length,
+        deliverables,
+      };
+    });
+  }
+
+  async deleteDeliverable(deliverableId: string) {
+    const deliverable = await this.prisma.deliverable.findUnique({
+      where: { id: deliverableId },
+      include: {
+        booking: { select: { id: true, reference: true, status: true } },
+      },
+    });
+    if (!deliverable) {
+      throw new NotFoundException('Deliverable not found');
+    }
+    if (
+      deliverable.booking.status === BookingStatus.CANCELLED ||
+      deliverable.booking.status === BookingStatus.COMPLETED
+    ) {
+      throw new ConflictException(
+        `Cannot remove deliverable from booking ${deliverable.booking.reference} because it is already ${deliverable.booking.status.toLowerCase()}.`,
+      );
+    }
+    if (deliverable.reviewStatus === DeliverableStatus.DELIVERED) {
+      throw new ConflictException('Delivered items cannot be removed.');
+    }
+
+    await this.prisma.deliverable.delete({
+      where: { id: deliverableId },
+    });
+
+    return { deleted: true, id: deliverableId };
   }
 }

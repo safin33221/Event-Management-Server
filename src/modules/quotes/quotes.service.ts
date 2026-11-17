@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   InquiryStatus,
@@ -13,6 +14,10 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { getPaginationParams } from '../../common/dto/pagination.dto.js';
 import { formatTk, sumPoisha, toJsonPoisha, toPoisha } from '../../common/money/money.js';
+import { SOFTILO_DEFAULT_BRANDING } from '../../common/branding/branding-defaults.js';
+import { StudioService } from '../studio/studio.service.js';
+import { provisionDeliverablesFromQuoteAndTemplatesTx } from '../bookings/deliverable-provisioning.js';
+import { buildQuoteProposalPdf } from './quote-pdf.js';
 import {
   AcceptQuoteDto,
   CreateQuoteDto,
@@ -23,7 +28,10 @@ import {
 
 @Injectable()
 export class QuotesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly studioService?: StudioService,
+  ) {}
 
   private computeTotals(items: QuoteLineItemInputDto[], discountInput = 0) {
     const computedItems = items.map((item, idx) => {
@@ -140,6 +148,10 @@ export class QuotesService {
   }
 
   async createQuote(currency: string, dto: CreateQuoteDto) {
+    if (!dto.eventTitle?.trim() || !dto.clientName?.trim() || !dto.clientPhone?.trim()) {
+      throw new BadRequestException('Event title, client name, and client phone are required.');
+    }
+
     let resolvedEventTypeId = dto.eventTypeId ?? null;
     let resolvedInquiryId = dto.inquiryId ?? null;
 
@@ -305,9 +317,11 @@ export class QuotesService {
       return { quote: updatedQuote, version };
     });
 
+    const serializedVersion = this.serializeVersion(created.version);
     return {
       ...created.quote,
-      currentVersion: this.serializeVersion(created.version),
+      currentVersion: serializedVersion,
+      versions: [serializedVersion],
     };
   }
 
@@ -552,6 +566,15 @@ export class QuotesService {
         });
       }
 
+      // Immediately seed deliverables from the accepted quote items & category templates
+      // so the booking shows them right away, even while PENDING_CONFIRMATION.
+      await provisionDeliverablesFromQuoteAndTemplatesTx(tx, {
+        bookingId: booking.id,
+        eventTypeId: quote.eventTypeId,
+        eventDate: quote.requestedDate,
+        quoteItems: acceptedVersion.items ?? [],
+      });
+
       await tx.auditLog.create({
         data: {
           actorId: actorUserId,
@@ -632,6 +655,79 @@ export class QuotesService {
     return {
       ...quote,
       versions: quote.versions.map((v) => this.serializeVersion(v)),
+    };
+  }
+
+  async getQuoteInvoicePdf(id: string): Promise<{ filename: string; buffer: Buffer }> {
+    const quote = await this.prisma.quote.findUnique({
+      where: { id },
+      include: {
+        eventType: { select: { name: true } },
+        versions: {
+          include: { items: { orderBy: { sortOrder: 'asc' } } },
+          orderBy: { versionNumber: 'desc' },
+        },
+      },
+    });
+    if (!quote) {
+      throw new NotFoundException('Quote not found');
+    }
+
+    const activeVersion =
+      quote.versions.find((v) => v.id === quote.currentVersionId) ?? quote.versions[0];
+    if (!activeVersion) {
+      throw new BadRequestException('Quote does not have a version to render');
+    }
+
+    const studio = this.studioService
+      ? await this.studioService.getPublicBranding()
+      : {
+          displayName: SOFTILO_DEFAULT_BRANDING.displayName,
+          logoUrl: SOFTILO_DEFAULT_BRANDING.logoUrl,
+          themeTokens: { ...SOFTILO_DEFAULT_BRANDING.themeTokens },
+          contactDetails: { ...SOFTILO_DEFAULT_BRANDING.contactDetails },
+          timezone: 'Asia/Dhaka',
+          currency: quote.currency || 'BDT',
+        };
+
+    const buffer = await buildQuoteProposalPdf({
+      studio,
+      quote: {
+        id: quote.id,
+        reference: quote.reference,
+        status: quote.status,
+        eventTitle: quote.eventTitle,
+        eventTypeName: quote.eventType?.name ?? null,
+        requestedDate: quote.requestedDate,
+        clientName: quote.clientName,
+        clientPhone: quote.clientPhone,
+        clientEmail: quote.clientEmail,
+        currency: quote.currency,
+        createdAt: quote.createdAt,
+      },
+      version: {
+        versionNumber: activeVersion.versionNumber,
+        status: activeVersion.status,
+        subtotalPoisha: toJsonPoisha(activeVersion.subtotalPoisha),
+        discountPoisha: toJsonPoisha(activeVersion.discountPoisha),
+        totalPoisha: toJsonPoisha(activeVersion.totalPoisha),
+        terms: activeVersion.terms,
+        validUntil: activeVersion.validUntil,
+        createdAt: activeVersion.createdAt,
+        items: activeVersion.items.map((item) => ({
+          id: item.id,
+          description: item.description,
+          quantity: item.quantity,
+          unitPricePoisha: toJsonPoisha(item.unitPricePoisha),
+          lineTotalPoisha: toJsonPoisha(item.lineTotalPoisha),
+        })),
+      },
+      generatedAt: new Date().toISOString(),
+    });
+
+    return {
+      filename: `quote-${quote.reference.toLowerCase()}-v${activeVersion.versionNumber}.pdf`,
+      buffer,
     };
   }
 }
