@@ -1157,25 +1157,74 @@ export class CatalogService {
     }
   }
 
-  private buildBookingPortfolioSlug(title: string, reference: string): string {
+  private async buildUniqueShortAlbumSlug(title: string, reference: string): Promise<string> {
     const refSuffix = reference.trim().toLowerCase();
-    const baseTitle = title
+    const numericMatch = refSuffix.match(/(\d+)$/);
+    const shortCode = numericMatch ? String(Number(numericMatch[1])) : refSuffix;
+
+    const stopWords = new Set([
+      'and',
+      'the',
+      'of',
+      'for',
+      'with',
+      'at',
+      'in',
+      'on',
+      'by',
+      'event',
+      'reception',
+      'ceremony',
+    ]);
+    const words = title
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-    if (!baseTitle) {
-      return refSuffix.slice(0, 80);
+      .replace(/['’]s\b/g, 's')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter((w) => w && !stopWords.has(w));
+
+    let base = '';
+    for (const word of words) {
+      const candidate = base ? `${base}-${word}` : word;
+      if (candidate.length <= 24) {
+        base = candidate;
+      } else {
+        break;
+      }
+      if (base.split('-').length >= 3) break;
     }
-    const maxTitleLen = Math.max(8, 80 - refSuffix.length - 1);
-    const trimmedTitle = baseTitle.slice(0, maxTitleLen).replace(/-+$/g, '');
-    return trimmedTitle ? `${trimmedTitle}-${refSuffix}` : refSuffix.slice(0, 80);
+
+    if (!base) {
+      base = words[0]?.slice(0, 24) || `album-${shortCode}`;
+    }
+
+    const candidates = Array.from(
+      new Set([base, `${base}-${shortCode}`, `${base}-${refSuffix}`]),
+    );
+    for (const candidate of candidates) {
+      const taken = await this.prisma.portfolioEvent.findUnique({
+        where: { slug: candidate },
+        select: { id: true },
+      });
+      if (!taken) {
+        return candidate;
+      }
+    }
+
+    return `${base.slice(0, Math.max(8, 72 - refSuffix.length))}-${refSuffix}`;
   }
 
   private async findExistingBookingPortfolio(reference: string) {
-    const refSuffix = reference.trim().toLowerCase();
+    const trimmedRef = reference.trim();
+    const refSuffix = trimmedRef.toLowerCase();
     return this.prisma.portfolioEvent.findFirst({
       where: {
-        OR: [{ slug: refSuffix }, { slug: { endsWith: `-${refSuffix}` } }],
+        OR: [
+          { description: { contains: `[${trimmedRef}]` } },
+          { slug: refSuffix },
+          { slug: { endsWith: `-${refSuffix}` } },
+        ],
       },
       include: {
         eventType: { select: { id: true, name: true, slug: true } },
@@ -1232,7 +1281,7 @@ export class CatalogService {
       );
     }
 
-    const slug = this.buildBookingPortfolioSlug(booking.eventTitle, booking.reference);
+    const slug = await this.buildUniqueShortAlbumSlug(booking.eventTitle, booking.reference);
     const primaryLocation = booking.sessions?.[0]?.location?.trim() || null;
 
     try {
@@ -1243,7 +1292,7 @@ export class CatalogService {
           eventDate: booking.eventDate,
           eventTypeId: booking.eventTypeId,
           location: primaryLocation,
-          description: `Curated digital portfolio for ${booking.clientName} (${booking.reference}).`,
+          description: `Digital album for ${booking.clientName} [${booking.reference}]`,
           status: PortfolioEventStatus.DRAFT,
         },
         include: {
