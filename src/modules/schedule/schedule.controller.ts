@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -21,6 +22,7 @@ import {
   CreateSessionDto,
   RescheduleSessionDto,
   ResourceAvailabilityQueryDto,
+  UpdateResourceDto,
 } from './dto/schedule.dto.js';
 
 @Controller()
@@ -37,6 +39,18 @@ export class ScheduleController {
   @Get('resources')
   listResources() {
     return this.scheduleService.listResources();
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Patch('resources/:id')
+  updateResource(@Param('id') id: string, @Body() dto: UpdateResourceDto) {
+    return this.scheduleService.updateResource(id, dto);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Delete('resources/:id')
+  deactivateResource(@Param('id') id: string) {
+    return this.scheduleService.deactivateResource(id);
   }
 
   @Roles(UserRole.OWNER, UserRole.COORDINATOR, UserRole.STAFF)

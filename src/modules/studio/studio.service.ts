@@ -1,5 +1,12 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { AdvancePolicyType, Prisma, StudioSettings, UserRole } from '../../generated/prisma/client.js';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  AdvancePolicyType,
+  AssignmentStatus,
+  Prisma,
+  ResourceType,
+  StudioSettings,
+  UserRole,
+} from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import {
   ContactDetails,
@@ -12,7 +19,7 @@ import {
 import { hashPassword } from '../../common/crypto/password.js';
 import { toJsonPoisha, toPoisha } from '../../common/money/money.js';
 import { isValidIanaTimezone } from '../../common/time/timezone.js';
-import { AddMemberDto } from './dto/add-member.dto.js';
+import { AddMemberDto, UpdateMemberDto } from './dto/add-member.dto.js';
 import { UpdateBrandingDto } from './dto/update-branding.dto.js';
 
 export const DEFAULT_STUDIO_ID = 'default';
@@ -467,43 +474,232 @@ export class StudioService {
     });
   }
 
+  private formatCrewResourceName(memberName: string, crewTitle?: string): string {
+    const cleanName = memberName.trim();
+    const cleanTitle = crewTitle?.trim();
+    if (!cleanTitle) return cleanName;
+    if (cleanName.toLowerCase().includes(cleanTitle.toLowerCase())) return cleanName;
+    return `${cleanName} (${cleanTitle})`;
+  }
+
+  private async syncCrewResourceTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    memberName: string,
+    isBookableCrew?: boolean,
+    crewTitle?: string,
+  ): Promise<void> {
+    if (isBookableCrew === undefined && crewTitle === undefined) {
+      return;
+    }
+
+    const existingResources = await tx.resource.findMany({
+      where: { userId, type: ResourceType.CREW },
+      orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
+    });
+
+    if (isBookableCrew === false) {
+      if (existingResources.some((r) => r.isActive)) {
+        await tx.resource.updateMany({
+          where: { userId, type: ResourceType.CREW, isActive: true },
+          data: { isActive: false },
+        });
+      }
+      return;
+    }
+
+    const activePrimary = existingResources.find((r) => r.isActive);
+    if (activePrimary) {
+      if (crewTitle !== undefined) {
+        await tx.resource.update({
+          where: { id: activePrimary.id },
+          data: { name: this.formatCrewResourceName(memberName, crewTitle) },
+        });
+      }
+      return;
+    }
+
+    if (isBookableCrew === true) {
+      const inactiveFirst = existingResources[0];
+      if (inactiveFirst) {
+        await tx.resource.update({
+          where: { id: inactiveFirst.id },
+          data: {
+            isActive: true,
+            name:
+              crewTitle !== undefined
+                ? this.formatCrewResourceName(memberName, crewTitle)
+                : inactiveFirst.name,
+          },
+        });
+        return;
+      }
+
+      await tx.resource.create({
+        data: {
+          userId,
+          type: ResourceType.CREW,
+          name: this.formatCrewResourceName(memberName, crewTitle),
+          isActive: true,
+        },
+      });
+    }
+  }
+
   async addMember(dto: AddMemberDto) {
     const email = dto.email.trim().toLowerCase();
+    const trimmedName = dto.name.trim();
     const existing = await this.prisma.user.findUnique({ where: { email } });
 
-    if (!existing) {
-      if (!dto.password) {
-        throw new BadRequestException('password is required when creating a new user');
+    if (!existing && !dto.password) {
+      throw new BadRequestException('password is required when creating a new user');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = !existing
+        ? await tx.user.create({
+            data: {
+              email,
+              name: trimmedName,
+              passwordHash: hashPassword(dto.password!),
+              role: dto.role,
+              isActive: dto.isActive ?? true,
+            },
+            select: { id: true, email: true, name: true, role: true, isActive: true },
+          })
+        : await tx.user.update({
+            where: { id: existing.id },
+            data: {
+              name: trimmedName,
+              role: dto.role,
+              isActive: dto.isActive ?? true,
+            },
+            select: { id: true, email: true, name: true, role: true, isActive: true },
+          });
+
+      if (user.isActive) {
+        await this.syncCrewResourceTx(
+          tx,
+          user.id,
+          user.name,
+          dto.isBookableCrew,
+          dto.crewTitle,
+        );
+      } else {
+        await tx.resource.updateMany({
+          where: { userId: user.id, type: ResourceType.CREW, isActive: true },
+          data: { isActive: false },
+        });
       }
-      const created = await this.prisma.user.create({
+
+      const resources = await tx.resource.findMany({
+        where: { userId: user.id, isActive: true },
+        select: { id: true, name: true, type: true, userId: true, isActive: true },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      return { ...user, resources };
+    });
+  }
+
+  async updateMember(memberId: string, actorUserId: string, dto: UpdateMemberDto) {
+    const existing = await this.prisma.user.findUnique({
+      where: { id: memberId },
+      select: { id: true, email: true, name: true, role: true, isActive: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Team member not found');
+    }
+
+    const nextRole = dto.role ?? existing.role;
+    const nextIsActive = dto.isActive ?? existing.isActive;
+    if (memberId === actorUserId && nextIsActive === false) {
+      throw new ConflictException('You cannot deactivate your own active session account');
+    }
+
+    const leavingOwnerGroup =
+      existing.role === UserRole.OWNER &&
+      existing.isActive &&
+      (nextRole !== UserRole.OWNER || !nextIsActive);
+
+    if (leavingOwnerGroup) {
+      const otherOwnersCount = await this.prisma.user.count({
+        where: {
+          id: { not: memberId },
+          role: UserRole.OWNER,
+          isActive: true,
+        },
+      });
+      if (otherOwnersCount === 0) {
+        throw new ConflictException('Studio must retain at least one active OWNER account');
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id: memberId },
         data: {
-          email,
-          name: dto.name.trim(),
-          passwordHash: hashPassword(dto.password),
+          name: dto.name !== undefined ? dto.name.trim() : undefined,
           role: dto.role,
-          isActive: dto.isActive ?? true,
+          isActive: dto.isActive,
         },
         select: { id: true, email: true, name: true, role: true, isActive: true },
       });
-      return created;
-    }
 
-    const updated = await this.prisma.user.update({
-      where: { id: existing.id },
-      data: {
-        name: dto.name.trim(),
-        role: dto.role,
-        isActive: dto.isActive ?? true,
-      },
-      select: { id: true, email: true, name: true, role: true, isActive: true },
+      if (!updated.isActive) {
+        await tx.resource.updateMany({
+          where: { userId: updated.id, type: ResourceType.CREW, isActive: true },
+          data: { isActive: false },
+        });
+      } else {
+        await this.syncCrewResourceTx(
+          tx,
+          updated.id,
+          updated.name,
+          dto.isBookableCrew,
+          dto.crewTitle,
+        );
+      }
+
+      const resources = await tx.resource.findMany({
+        where: { userId: updated.id, isActive: true },
+        select: { id: true, name: true, type: true, userId: true, isActive: true },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      return { ...updated, resources };
     });
-    return updated;
   }
 
   async listMembers() {
-    return this.prisma.user.findMany({
-      select: { id: true, email: true, name: true, role: true, isActive: true },
+    const members = await this.prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        resources: {
+          where: { isActive: true },
+          select: { id: true, name: true, type: true, userId: true, isActive: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        _count: {
+          select: {
+            assignments: {
+              where: {
+                status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.ACCEPTED] },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: 'asc' },
     });
+
+    return members.map(({ _count, ...member }) => ({
+      ...member,
+      openAssignmentsCount: _count.assignments,
+    }));
   }
 }

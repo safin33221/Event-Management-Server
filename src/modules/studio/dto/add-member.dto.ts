@@ -19,4 +19,34 @@ export class AddMemberDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isBookableCrew?: boolean;
+
+  @IsOptional()
+  @IsString()
+  crewTitle?: string;
+}
+
+export class UpdateMemberDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isBookableCrew?: boolean;
+
+  @IsOptional()
+  @IsString()
+  crewTitle?: string;
 }

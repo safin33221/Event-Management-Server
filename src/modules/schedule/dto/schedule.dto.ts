@@ -1,12 +1,14 @@
 import { ResourceType } from '../../../generated/prisma/client.js';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateResourceDto {
@@ -19,6 +21,25 @@ export class CreateResourceDto {
   @IsOptional()
   @IsUUID()
   userId?: string;
+}
+
+export class UpdateResourceDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsEnum(ResourceType)
+  type?: ResourceType;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  userId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class CreateSessionDto {

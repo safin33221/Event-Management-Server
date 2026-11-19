@@ -27,6 +27,18 @@ export class OperationsController {
     return this.operationsService.listMyAssignments(actor.userId);
   }
 
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR, UserRole.ACCOUNTANT, UserRole.STAFF)
+  @Get('assignments/my-workspace')
+  getMyCrewWorkspace(@CurrentActor() actor: RequestActor) {
+    return this.operationsService.getMyCrewWorkspace(actor.userId);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.COORDINATOR)
+  @Get('assignments/studio')
+  getStudioDispatch() {
+    return this.operationsService.getStudioDispatch();
+  }
+
   @Roles(UserRole.OWNER, UserRole.COORDINATOR, UserRole.STAFF)
   @Patch('assignments/:id')
   updateAssignment(

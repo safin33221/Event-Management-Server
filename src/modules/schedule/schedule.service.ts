@@ -18,6 +18,7 @@ import {
   CreateSessionDto,
   RescheduleSessionDto,
   ResourceAvailabilityQueryDto,
+  UpdateResourceDto,
 } from './dto/schedule.dto.js';
 import {
   buildIcsCalendar,
@@ -46,14 +47,94 @@ export class ScheduleService {
         type: dto.type,
         userId: dto.userId ?? null,
       },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, role: true, isActive: true },
+        },
+      },
     });
   }
 
   async listResources() {
     return this.prisma.resource.findMany({
       where: { isActive: true },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, role: true, isActive: true },
+        },
+      },
       orderBy: [{ type: 'asc' }, { name: 'asc' }],
     });
+  }
+
+  async updateResource(id: string, dto: UpdateResourceDto) {
+    const existing = await this.prisma.resource.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Resource not found');
+    }
+
+    if (dto.userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: dto.userId },
+        select: { id: true, isActive: true },
+      });
+      if (!user || !user.isActive) {
+        throw new BadRequestException('Linked team member does not exist or is inactive');
+      }
+    }
+
+    return this.prisma.resource.update({
+      where: { id },
+      data: {
+        name: dto.name !== undefined ? dto.name.trim() : undefined,
+        type: dto.type,
+        userId: dto.userId === null ? null : dto.userId,
+        isActive: dto.isActive,
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, role: true, isActive: true },
+        },
+      },
+    });
+  }
+
+  async deactivateResource(id: string) {
+    const existing = await this.prisma.resource.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Resource not found');
+    }
+
+    const activeFutureReservation = await this.prisma.resourceReservation.findFirst({
+      where: {
+        resourceId: id,
+        status: ReservationStatus.RESERVED,
+        endAt: { gt: new Date() },
+        session: { status: SessionStatus.SCHEDULED },
+      },
+      include: {
+        session: {
+          select: {
+            title: true,
+            booking: { select: { reference: true } },
+          },
+        },
+      },
+    });
+
+    if (activeFutureReservation) {
+      const ref = activeFutureReservation.session.booking?.reference ?? '';
+      throw new ConflictException(
+        `Cannot remove "${existing.name}" because it is reserved for upcoming session "${activeFutureReservation.session.title}"${ref ? ` (${ref})` : ''}. Update that shoot session first.`,
+      );
+    }
+
+    await this.prisma.resource.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    return { archived: true, id };
   }
 
   /**
@@ -341,7 +422,7 @@ export class ScheduleService {
         reservations: {
           where: { status: ReservationStatus.RESERVED },
           include: {
-            resource: { select: { id: true, name: true, type: true } },
+            resource: { select: { id: true, name: true, type: true, userId: true } },
           },
         },
       },
@@ -369,6 +450,11 @@ export class ScheduleService {
     const [resources, conflicts] = await Promise.all([
       this.prisma.resource.findMany({
         where: { isActive: true },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, role: true, isActive: true },
+          },
+        },
         orderBy: [{ type: 'asc' }, { name: 'asc' }],
       }),
       this.prisma.resourceReservation.findMany({

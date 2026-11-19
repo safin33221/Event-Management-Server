@@ -5,7 +5,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BookingStatus, DeliverableStatus, UserRole } from '../../generated/prisma/client.js';
+import {
+  AssignmentStatus,
+  BookingStatus,
+  DeliverableStatus,
+  ReservationStatus,
+  ResourceType,
+  SessionStatus,
+  UserRole,
+} from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { provisionDeliverablesFromQuoteAndTemplatesTx } from '../bookings/deliverable-provisioning.js';
 import {
@@ -93,6 +101,142 @@ export class OperationsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getMyCrewWorkspace(userId: string) {
+    const [assignments, upcomingShoots] = await Promise.all([
+      this.listMyAssignments(userId),
+      this.prisma.eventSession.findMany({
+        where: {
+          status: { not: SessionStatus.CANCELLED },
+          reservations: {
+            some: {
+              status: ReservationStatus.RESERVED,
+              resource: { userId, isActive: true },
+            },
+          },
+        },
+        include: {
+          booking: {
+            select: {
+              id: true,
+              reference: true,
+              eventTitle: true,
+              eventDate: true,
+              clientName: true,
+              clientPhone: true,
+              status: true,
+            },
+          },
+          reservations: {
+            where: { status: ReservationStatus.RESERVED },
+            include: {
+              resource: { select: { id: true, name: true, type: true, userId: true } },
+            },
+          },
+        },
+        orderBy: { startAt: 'asc' },
+      }),
+    ]);
+
+    return { assignments, upcomingShoots };
+  }
+
+  async getStudioDispatch() {
+    const [assignments, upcomingSessions, members] = await Promise.all([
+      this.prisma.assignment.findMany({
+        where: { status: { not: AssignmentStatus.CANCELLED } },
+        include: {
+          assignee: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+          booking: {
+            select: {
+              id: true,
+              reference: true,
+              eventTitle: true,
+              eventDate: true,
+              clientName: true,
+              clientPhone: true,
+              status: true,
+            },
+          },
+          session: {
+            select: {
+              id: true,
+              title: true,
+              startAt: true,
+              endAt: true,
+              location: true,
+              status: true,
+            },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 150,
+      }),
+      this.prisma.eventSession.findMany({
+        where: {
+          status: SessionStatus.SCHEDULED,
+          booking: { status: { not: BookingStatus.CANCELLED } },
+        },
+        include: {
+          booking: {
+            select: {
+              id: true,
+              reference: true,
+              eventTitle: true,
+              eventDate: true,
+              clientName: true,
+              clientPhone: true,
+              status: true,
+            },
+          },
+          reservations: {
+            where: { status: ReservationStatus.RESERVED },
+            include: {
+              resource: { select: { id: true, name: true, type: true, userId: true } },
+            },
+          },
+        },
+        orderBy: { startAt: 'asc' },
+        take: 60,
+      }),
+      this.prisma.user.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          resources: {
+            where: { isActive: true, type: ResourceType.CREW },
+            select: { id: true, name: true, type: true, userId: true },
+          },
+          assignments: {
+            where: { status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.ACCEPTED] } },
+            select: { id: true },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    return {
+      assignments,
+      upcomingSessions,
+      crewSummary: members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        email: m.email,
+        role: m.role,
+        crewResources: m.resources,
+        openTasksCount: m.assignments.length,
+        upcomingShootsCount: upcomingSessions.filter((s) =>
+          s.reservations.some((r) => r.resource?.userId === m.id),
+        ).length,
+      })),
+    };
   }
 
   async updateAssignment(
