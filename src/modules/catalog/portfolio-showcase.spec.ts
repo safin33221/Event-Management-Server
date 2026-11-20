@@ -148,6 +148,7 @@ describe('Portfolio Showcase Events & Cloudinary Upload Workflow', () => {
       process.env.CLOUDINARY_CLOUD_NAME = 'demo-studio-cloud';
       process.env.CLOUDINARY_API_KEY = '123456789012345';
       process.env.CLOUDINARY_API_SECRET = 'super-secret-value';
+      process.env.CLOUDINARY_FOLDER_PREFIX = 'softilo/portfolio';
 
       const store: Array<{
         id: string;

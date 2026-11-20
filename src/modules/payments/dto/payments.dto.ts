@@ -1,6 +1,7 @@
 import {
   AdjustmentType,
   BookingStatus,
+  ExpenseCategory,
   PaymentMethod,
 } from '../../../generated/prisma/client.js';
 import {
@@ -104,4 +105,43 @@ export class FinancialReportQueryDto {
   @IsEnum(BookingStatus)
   bookingStatus?: BookingStatus;
 }
+
+export class CreateExpenseDto {
+  @IsEnum(ExpenseCategory)
+  category!: ExpenseCategory;
+
+  @IsString()
+  title!: string;
+
+  @IsOptional()
+  @IsString()
+  vendorOrPayee?: string;
+
+  @IsInt()
+  @Min(1)
+  amountPoisha!: number;
+
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  method?: PaymentMethod;
+
+  @IsOptional()
+  @IsString()
+  reference?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'incurredOn must be a valid YYYY-MM-DD date string',
+  })
+  incurredOn?: string;
+
+  @IsOptional()
+  @IsUUID()
+  bookingId?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
 

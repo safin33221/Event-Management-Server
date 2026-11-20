@@ -655,10 +655,6 @@ export type EnumPaymentTypeFieldUpdateOperationsInput = {
   set?: $Enums.PaymentType
 }
 
-export type EnumPaymentMethodFieldUpdateOperationsInput = {
-  set?: $Enums.PaymentMethod
-}
-
 export type EnumVerificationStateFieldUpdateOperationsInput = {
   set?: $Enums.VerificationState
 }

@@ -143,6 +143,17 @@ enum PortfolioMediaStatus {
   FAILED
 }
 
+enum ExpenseCategory {
+  CREW_PAYOUT
+  EQUIPMENT_RENTAL
+  ALBUM_PRINTING
+  TRANSPORT_FOOD
+  VENUE_DECOR
+  STUDIO_OVERHEAD
+  MARKETING
+  OTHER
+}
+
 model StudioSettings {
   id                  String            @id @default("default")
   name                String            @default("Softilo Event Management")
@@ -474,11 +485,35 @@ model Booking {
   sessions             EventSession[]
   paymentEntries       PaymentEntry[]
   priceAdjustments     PriceAdjustment[]
+  expenseEntries       ExpenseEntry[]
   assignments          Assignment[]
   deliverables         Deliverable[]
 
   @@index([status, eventDate])
   @@map("bookings")
+}
+
+model ExpenseEntry {
+  id            String          @id @default(uuid()) @db.Uuid
+  bookingId     String?         @map("booking_id") @db.Uuid
+  category      ExpenseCategory
+  title         String
+  vendorOrPayee String?         @map("vendor_or_payee")
+  amountPoisha  BigInt          @map("amount_poisha")
+  currency      String          @default("BDT")
+  method        PaymentMethod   @default(CASH)
+  reference     String?
+  incurredOn    DateTime        @map("incurred_on") @db.Date
+  notes         String?
+  recordedById  String          @map("recorded_by_id") @db.Uuid
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([incurredOn, category])
+  @@index([bookingId])
+  @@map("expense_entries")
 }
 
 model Resource {

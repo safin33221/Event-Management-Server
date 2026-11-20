@@ -9,6 +9,8 @@ import {
   AdjustmentType,
   AdvancePolicyType,
   BookingStatus,
+  ExpenseCategory,
+  ExpenseEntry,
   PaymentEntry,
   PaymentMethod,
   PaymentType,
@@ -31,6 +33,7 @@ import {
 } from '../../common/time/timezone.js';
 import {
   CreateAdjustmentDto,
+  CreateExpenseDto,
   FinancialReportQueryDto,
   IssueRefundDto,
   RecordPaymentDto,
@@ -636,6 +639,168 @@ export class PaymentsService {
     };
   }
 
+  private serializeExpense(
+    expense: ExpenseEntry & {
+      booking?: {
+        id: string;
+        reference: string;
+        eventTitle: string;
+        clientName: string;
+      } | null;
+    },
+  ) {
+    return {
+      ...expense,
+      amountPoisha: toJsonPoisha(expense.amountPoisha),
+      booking: expense.booking ?? null,
+    };
+  }
+
+  async recordExpense(actorId: string, dto: CreateExpenseDto) {
+    const amountPoisha = toPoisha(dto.amountPoisha);
+    if (amountPoisha <= 0n) {
+      throw new BadRequestException('Expense amount must be greater than Tk 0.');
+    }
+
+    const title = dto.title.trim();
+    if (!title) {
+      throw new BadRequestException('Expense title is required.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const studio = await tx.studioSettings.findUnique({
+        where: { id: 'default' },
+        select: { currency: true, timezone: true },
+      });
+      const currency = studio?.currency || 'BDT';
+      const timezone = studio?.timezone || 'Asia/Dhaka';
+
+      if (dto.bookingId) {
+        const booking = await tx.booking.findUnique({
+          where: { id: dto.bookingId },
+          select: { id: true },
+        });
+        if (!booking) {
+          throw new NotFoundException('Linked booking not found.');
+        }
+      }
+
+      const incurredDateStr =
+        dto.incurredOn || toAgencyLocalDate(new Date(), timezone);
+      const incurredOn = new Date(`${incurredDateStr}T00:00:00.000Z`);
+
+      const created = await tx.expenseEntry.create({
+        data: {
+          bookingId: dto.bookingId ?? null,
+          category: dto.category,
+          title,
+          vendorOrPayee: dto.vendorOrPayee?.trim() || null,
+          amountPoisha,
+          currency,
+          method: dto.method ?? PaymentMethod.CASH,
+          reference: dto.reference?.trim() || null,
+          incurredOn,
+          notes: dto.notes?.trim() || null,
+          recordedById: actorId,
+        },
+        include: {
+          booking: {
+            select: {
+              id: true,
+              reference: true,
+              eventTitle: true,
+              clientName: true,
+            },
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          entityType: 'ExpenseEntry',
+          entityId: created.id,
+          action: 'EXPENSE_RECORDED',
+          details: {
+            category: created.category,
+            title: created.title,
+            amountPoisha: toJsonPoisha(created.amountPoisha),
+            bookingId: created.bookingId,
+          },
+        },
+      });
+
+      return this.serializeExpense(created);
+    });
+  }
+
+  async listExpenses(query: FinancialReportQueryDto = {}) {
+    if (typeof this.prisma.expenseEntry?.findMany !== 'function') {
+      return [];
+    }
+    const where: Prisma.ExpenseEntryWhereInput = {
+      ...(query.method ? { method: query.method } : {}),
+      ...(query.from || query.to
+        ? {
+            incurredOn: {
+              ...(query.from ? { gte: new Date(`${query.from}T00:00:00.000Z`) } : {}),
+              ...(query.to ? { lte: new Date(`${query.to}T00:00:00.000Z`) } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const items = await this.prisma.expenseEntry.findMany({
+      where,
+      include: {
+        booking: {
+          select: {
+            id: true,
+            reference: true,
+            eventTitle: true,
+            clientName: true,
+          },
+        },
+      },
+      orderBy: [{ incurredOn: 'desc' }, { createdAt: 'desc' }],
+      take: 300,
+    });
+
+    return items.map((e) => this.serializeExpense(e));
+  }
+
+  async deleteExpense(expenseId: string, actorId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.expenseEntry.findUnique({
+        where: { id: expenseId },
+      });
+      if (!existing) {
+        throw new NotFoundException('Expense entry not found.');
+      }
+
+      await tx.expenseEntry.delete({
+        where: { id: expenseId },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          entityType: 'ExpenseEntry',
+          entityId: expenseId,
+          action: 'EXPENSE_DELETED',
+          details: {
+            category: existing.category,
+            title: existing.title,
+            amountPoisha: toJsonPoisha(existing.amountPoisha),
+            bookingId: existing.bookingId,
+          },
+        },
+      });
+
+      return { deletedExpenseId: expenseId };
+    });
+  }
+
   async getFinancialReport(query: FinancialReportQueryDto = {}) {
     const studio = await this.prisma.studioSettings.findUnique({
       where: { id: 'default' },
@@ -689,7 +854,20 @@ export class PaymentsService {
         : {}),
     };
 
-    const [bookings, paymentEntries] = await Promise.all([
+    const expenseWhere: Prisma.ExpenseEntryWhereInput = {
+      ...(query.method ? { method: query.method } : {}),
+      ...(query.bookingStatus ? { booking: { status: query.bookingStatus } } : {}),
+      ...(query.from || query.to
+        ? {
+            incurredOn: {
+              ...(query.from ? { gte: new Date(`${query.from}T00:00:00.000Z`) } : {}),
+              ...(query.to ? { lte: new Date(`${query.to}T00:00:00.000Z`) } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const [bookings, paymentEntries, expenseEntries] = await Promise.all([
       this.prisma.booking.findMany({
         where: bookingWhere,
         include: {
@@ -718,7 +896,34 @@ export class PaymentsService {
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         take: 300,
       }),
+      typeof this.prisma.expenseEntry?.findMany === 'function'
+        ? this.prisma.expenseEntry.findMany({
+            where: expenseWhere,
+            include: {
+              booking: {
+                select: {
+                  id: true,
+                  reference: true,
+                  eventTitle: true,
+                  clientName: true,
+                },
+              },
+            },
+            orderBy: [{ incurredOn: 'desc' }, { createdAt: 'desc' }],
+            take: 300,
+          })
+        : Promise.resolve([]),
     ]);
+
+    const bookingDirectExpenseMap = new Map<string, bigint>();
+    for (const exp of expenseEntries) {
+      if (exp.bookingId) {
+        bookingDirectExpenseMap.set(
+          exp.bookingId,
+          (bookingDirectExpenseMap.get(exp.bookingId) ?? 0n) + exp.amountPoisha,
+        );
+      }
+    }
 
     // 1. Compute per-booking financial statement & receivables
     let totalContractedPoisha = 0n;
@@ -754,6 +959,7 @@ export class PaymentsService {
         contractedPoisha: bigint;
         collectedPoisha: bigint;
         refundedPoisha: bigint;
+        expensesPoisha: bigint;
       }
     >();
 
@@ -766,6 +972,7 @@ export class PaymentsService {
           contractedPoisha: 0n,
           collectedPoisha: 0n,
           refundedPoisha: 0n,
+          expensesPoisha: 0n,
         };
         monthlyMap.set(monthKey, existing);
       }
@@ -884,6 +1091,9 @@ export class PaymentsService {
         monthBucket.contractedPoisha += effectiveAgreedCharge;
       }
 
+      const directExpenses = bookingDirectExpenseMap.get(b.id) ?? 0n;
+      const bookingNetProfit = netPaid - directExpenses;
+
       return {
         bookingId: b.id,
         reference: b.reference,
@@ -902,6 +1112,8 @@ export class PaymentsService {
         creditNotesPoisha: toJsonPoisha(creditNotes),
         outstandingDuePoisha: toJsonPoisha(outstandingDue),
         customerCreditPoisha: toJsonPoisha(customerCredit),
+        directExpensesPoisha: toJsonPoisha(directExpenses),
+        bookingNetProfitPoisha: toJsonPoisha(bookingNetProfit),
         requiredAdvancePoisha: toJsonPoisha(requiredAdvance),
         isAdvanceMet: verifiedReceipts >= requiredAdvance,
       };
@@ -972,6 +1184,68 @@ export class PaymentsService {
     const netCollectedRevenuePoisha =
       totalVerifiedReceiptsPoisha - totalCompletedRefundsPoisha;
 
+    // 3. Aggregate studio & booking expenses (kept strictly separate from customer balance)
+    const allExpenseCategories: ExpenseCategory[] = [
+      ExpenseCategory.CREW_PAYOUT,
+      ExpenseCategory.EQUIPMENT_RENTAL,
+      ExpenseCategory.ALBUM_PRINTING,
+      ExpenseCategory.TRANSPORT_FOOD,
+      ExpenseCategory.VENUE_DECOR,
+      ExpenseCategory.STUDIO_OVERHEAD,
+      ExpenseCategory.MARKETING,
+      ExpenseCategory.OTHER,
+    ];
+
+    const expenseCatMap = new Map<
+      ExpenseCategory,
+      { category: ExpenseCategory; amountPoisha: bigint; count: number }
+    >();
+    for (const cat of allExpenseCategories) {
+      expenseCatMap.set(cat, { category: cat, amountPoisha: 0n, count: 0 });
+    }
+
+    let totalExpensesPoisha = 0n;
+    let directBookingExpensesPoisha = 0n;
+    let generalOverheadExpensesPoisha = 0n;
+
+    for (const exp of expenseEntries) {
+      totalExpensesPoisha += exp.amountPoisha;
+      if (exp.bookingId) {
+        directBookingExpensesPoisha += exp.amountPoisha;
+      } else {
+        generalOverheadExpensesPoisha += exp.amountPoisha;
+      }
+      const catBucket = expenseCatMap.get(exp.category) ?? {
+        category: exp.category,
+        amountPoisha: 0n,
+        count: 0,
+      };
+      catBucket.amountPoisha += exp.amountPoisha;
+      catBucket.count += 1;
+      expenseCatMap.set(exp.category, catBucket);
+
+      const expMonthKey = exp.incurredOn.toISOString().slice(0, 7);
+      const monthBucket = ensureMonthEntry(expMonthKey);
+      monthBucket.expensesPoisha += exp.amountPoisha;
+    }
+
+    const netCashProfitPoisha = netCollectedRevenuePoisha - totalExpensesPoisha;
+    const projectedNetProfitPoisha = totalEffectiveContractedPoisha - totalExpensesPoisha;
+    const profitMarginPercent =
+      netCollectedRevenuePoisha > 0n
+        ? Number((netCashProfitPoisha * 1000n) / netCollectedRevenuePoisha) / 10
+        : 0;
+
+    const byExpenseCategory = Array.from(expenseCatMap.values()).map((c) => ({
+      category: c.category,
+      amountPoisha: toJsonPoisha(c.amountPoisha),
+      count: c.count,
+      sharePercent:
+        totalExpensesPoisha > 0n
+          ? Number((c.amountPoisha * 1000n) / totalExpensesPoisha) / 10
+          : 0,
+    }));
+
     const collectionRatePercent =
       totalEffectiveContractedPoisha > 0n
         ? Math.min(
@@ -1002,14 +1276,19 @@ export class PaymentsService {
 
     const byMonth = Array.from(monthlyMap.values())
       .sort((a, b) => b.month.localeCompare(a.month))
-      .map((m) => ({
-        month: m.month,
-        bookingsCount: m.bookingsCount,
-        contractedPoisha: toJsonPoisha(m.contractedPoisha),
-        collectedPoisha: toJsonPoisha(m.collectedPoisha),
-        refundedPoisha: toJsonPoisha(m.refundedPoisha),
-        netCollectedPoisha: toJsonPoisha(m.collectedPoisha - m.refundedPoisha),
-      }));
+      .map((m) => {
+        const netCol = m.collectedPoisha - m.refundedPoisha;
+        return {
+          month: m.month,
+          bookingsCount: m.bookingsCount,
+          contractedPoisha: toJsonPoisha(m.contractedPoisha),
+          collectedPoisha: toJsonPoisha(m.collectedPoisha),
+          refundedPoisha: toJsonPoisha(m.refundedPoisha),
+          netCollectedPoisha: toJsonPoisha(netCol),
+          expensesPoisha: toJsonPoisha(m.expensesPoisha),
+          netCashProfitPoisha: toJsonPoisha(netCol - m.expensesPoisha),
+        };
+      });
 
     const byEventType = Array.from(eventTypeAggMap.values())
       .sort((a, b) => Number(b.agreedTotalPoisha - a.agreedTotalPoisha))
@@ -1026,6 +1305,8 @@ export class PaymentsService {
       ...this.serializeEntry(e),
       booking: e.booking,
     }));
+
+    const expenses = expenseEntries.slice(0, 150).map((e) => this.serializeExpense(e));
 
     return {
       currency,
@@ -1048,6 +1329,13 @@ export class PaymentsService {
         totalChargeAdjustmentsPoisha: toJsonPoisha(totalChargeAdjustmentsPoisha),
         totalOutstandingDuePoisha: toJsonPoisha(totalOutstandingDuePoisha),
         totalCustomerCreditPoisha: toJsonPoisha(totalCustomerCreditPoisha),
+        totalExpensesPoisha: toJsonPoisha(totalExpensesPoisha),
+        directBookingExpensesPoisha: toJsonPoisha(directBookingExpensesPoisha),
+        generalOverheadExpensesPoisha: toJsonPoisha(generalOverheadExpensesPoisha),
+        netCashProfitPoisha: toJsonPoisha(netCashProfitPoisha),
+        projectedNetProfitPoisha: toJsonPoisha(projectedNetProfitPoisha),
+        profitMarginPercent,
+        expensesCount: expenseEntries.length,
         collectionRatePercent,
         activeBookingsCount,
         completedBookingsCount,
@@ -1057,10 +1345,12 @@ export class PaymentsService {
         pendingReceiptsCount,
       },
       byMethod,
+      byExpenseCategory,
       byMonth,
       byEventType,
       receivables,
       transactions,
+      expenses,
     };
   }
 }

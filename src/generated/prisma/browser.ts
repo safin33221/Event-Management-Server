@@ -103,6 +103,11 @@ export type QuoteLineItem = Prisma.QuoteLineItemModel
  */
 export type Booking = Prisma.BookingModel
 /**
+ * Model ExpenseEntry
+ * 
+ */
+export type ExpenseEntry = Prisma.ExpenseEntryModel
+/**
  * Model Resource
  * 
  */

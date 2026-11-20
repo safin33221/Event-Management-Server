@@ -68,6 +68,7 @@ export const ModelName = {
   QuoteVersion: 'QuoteVersion',
   QuoteLineItem: 'QuoteLineItem',
   Booking: 'Booking',
+  ExpenseEntry: 'ExpenseEntry',
   Resource: 'Resource',
   EventSession: 'EventSession',
   ResourceReservation: 'ResourceReservation',
@@ -373,6 +374,26 @@ export const BookingScalarFieldEnum = {
 } as const
 
 export type BookingScalarFieldEnum = (typeof BookingScalarFieldEnum)[keyof typeof BookingScalarFieldEnum]
+
+
+export const ExpenseEntryScalarFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  category: 'category',
+  title: 'title',
+  vendorOrPayee: 'vendorOrPayee',
+  amountPoisha: 'amountPoisha',
+  currency: 'currency',
+  method: 'method',
+  reference: 'reference',
+  incurredOn: 'incurredOn',
+  notes: 'notes',
+  recordedById: 'recordedById',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ExpenseEntryScalarFieldEnum = (typeof ExpenseEntryScalarFieldEnum)[keyof typeof ExpenseEntryScalarFieldEnum]
 
 
 export const ResourceScalarFieldEnum = {

@@ -201,3 +201,17 @@ export const PortfolioMediaStatus = {
 } as const
 
 export type PortfolioMediaStatus = (typeof PortfolioMediaStatus)[keyof typeof PortfolioMediaStatus]
+
+
+export const ExpenseCategory = {
+  CREW_PAYOUT: 'CREW_PAYOUT',
+  EQUIPMENT_RENTAL: 'EQUIPMENT_RENTAL',
+  ALBUM_PRINTING: 'ALBUM_PRINTING',
+  TRANSPORT_FOOD: 'TRANSPORT_FOOD',
+  VENUE_DECOR: 'VENUE_DECOR',
+  STUDIO_OVERHEAD: 'STUDIO_OVERHEAD',
+  MARKETING: 'MARKETING',
+  OTHER: 'OTHER'
+} as const
+
+export type ExpenseCategory = (typeof ExpenseCategory)[keyof typeof ExpenseCategory]

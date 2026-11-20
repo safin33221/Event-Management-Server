@@ -162,6 +162,49 @@ describe('Financial Report Module (PaymentsService.getFinancialReport & RBAC)', 
             },
           })),
       },
+      expenseEntry: {
+        findMany: async () => [
+          {
+            id: 'exp-1',
+            bookingId: 'b-1',
+            category: 'CREW_PAYOUT',
+            title: 'Freelance Cinematographer Honorarium',
+            vendorOrPayee: 'Tanvir Films',
+            amountPoisha: 600000n, // Tk 6,000 direct booking expense
+            currency: 'BDT',
+            method: 'BKASH',
+            reference: 'BK-EXP-101',
+            incurredOn: new Date('2026-11-11T00:00:00.000Z'),
+            notes: null,
+            recordedById: 'u-1',
+            createdAt: new Date('2026-11-11T10:00:00.000Z'),
+            updatedAt: new Date('2026-11-11T10:00:00.000Z'),
+            booking: {
+              id: mockBooking.id,
+              reference: mockBooking.reference,
+              eventTitle: mockBooking.eventTitle,
+              clientName: mockBooking.clientName,
+            },
+          },
+          {
+            id: 'exp-2',
+            bookingId: null,
+            category: 'STUDIO_OVERHEAD',
+            title: 'Studio Internet & Cloud Storage',
+            vendorOrPayee: 'ISP',
+            amountPoisha: 200000n, // Tk 2,000 general overhead
+            currency: 'BDT',
+            method: 'BANK',
+            reference: null,
+            incurredOn: new Date('2026-11-13T00:00:00.000Z'),
+            notes: null,
+            recordedById: 'u-1',
+            createdAt: new Date('2026-11-13T10:00:00.000Z'),
+            updatedAt: new Date('2026-11-13T10:00:00.000Z'),
+            booking: null,
+          },
+        ],
+      },
     };
 
     const service = new PaymentsService(mockPrisma as never);
@@ -174,7 +217,14 @@ describe('Financial Report Module (PaymentsService.getFinancialReport & RBAC)', 
     expect(report.summary.completedRefundsPoisha).toBe(200000); // Tk 2,000
     expect(report.summary.netCollectedRevenuePoisha).toBe(1800000); // Tk 18,000 net paid
     expect(report.summary.pendingVerificationPoisha).toBe(500000); // Tk 5,000 pending
-    expect(report.summary.totalOutstandingDuePoisha).toBe(2900000); // Tk 47,000 - Tk 18,000 = Tk 29,000 due
+    // Customer due balance remains Tk 29,000 (vendor expenses are strictly separate from customer balance)
+    expect(report.summary.totalOutstandingDuePoisha).toBe(2900000);
+    // Expense & Final Net Profit assertions
+    expect(report.summary.totalExpensesPoisha).toBe(800000); // Tk 8,000 total expenses (6,000 + 2,000)
+    expect(report.summary.directBookingExpensesPoisha).toBe(600000); // Tk 6,000
+    expect(report.summary.generalOverheadExpensesPoisha).toBe(200000); // Tk 2,000
+    expect(report.summary.netCashProfitPoisha).toBe(1000000); // Tk 18,000 collected - Tk 8,000 expenses = Tk 10,000 net cash profit
+    expect(report.summary.projectedNetProfitPoisha).toBe(3900000); // Tk 47,000 contracted - Tk 8,000 expenses = Tk 39,000 projected profit
 
     const bkashRow = report.byMethod.find((m) => m.method === 'BKASH');
     expect(bkashRow?.verifiedReceiptsPoisha).toBe(2000000);
@@ -182,6 +232,8 @@ describe('Financial Report Module (PaymentsService.getFinancialReport & RBAC)', 
 
     expect(report.receivables).toHaveLength(1);
     expect(report.receivables[0].outstandingDuePoisha).toBe(2900000);
+    expect(report.receivables[0].directExpensesPoisha).toBe(600000);
+    expect(report.receivables[0].bookingNetProfitPoisha).toBe(1200000); // Tk 18,000 net paid - Tk 6,000 direct expense = Tk 12,000
     expect(report.byEventType[0].eventTypeName).toBe('Wedding');
   });
 });
