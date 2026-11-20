@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   AssignmentStatus,
@@ -16,6 +17,7 @@ import {
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { provisionDeliverablesFromQuoteAndTemplatesTx } from '../bookings/deliverable-provisioning.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import {
   CreateAssignmentDto,
   CreateDeliverableDto,
@@ -26,7 +28,10 @@ import {
 
 @Injectable()
 export class OperationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationsService,
+  ) {}
 
   private async assertActiveUser(userId: string) {
     const user = await this.prisma.user.findUnique({
@@ -41,7 +46,7 @@ export class OperationsService {
   async createAssignment(bookingId: string, dto: CreateAssignmentDto) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      select: { id: true, reference: true, status: true },
+      select: { id: true, reference: true, status: true, eventTitle: true },
     });
     if (!booking) {
       throw new NotFoundException('Booking not found');
@@ -62,7 +67,7 @@ export class OperationsService {
     }
     await this.assertActiveUser(dto.assigneeUserId);
 
-    return this.prisma.assignment.create({
+    const created = await this.prisma.assignment.create({
       data: {
         bookingId,
         sessionId: dto.sessionId ?? null,
@@ -71,6 +76,20 @@ export class OperationsService {
         notes: dto.notes ?? null,
       },
     });
+
+    if (this.notifications) {
+      await this.notifications.notifyUsers([dto.assigneeUserId], {
+        category: 'TASK',
+        severity: 'ACTION',
+        title: `New Crew Task: ${created.roleLabel}`,
+        body: `Assigned on ${booking.reference} — ${booking.eventTitle}.`,
+        href: '/staff',
+        entityType: 'Assignment',
+        entityId: created.id,
+      });
+    }
+
+    return created;
   }
 
   async listMyAssignments(userId: string) {
@@ -247,6 +266,10 @@ export class OperationsService {
   ) {
     const assignment = await this.prisma.assignment.findUnique({
       where: { id: assignmentId },
+      include: {
+        booking: { select: { reference: true, eventTitle: true } },
+        assignee: { select: { name: true } },
+      },
     });
     if (!assignment) {
       throw new NotFoundException('Assignment not found');
@@ -255,13 +278,32 @@ export class OperationsService {
       throw new ForbiddenException('Staff can only update their own assignments');
     }
 
-    return this.prisma.assignment.update({
+    const updated = await this.prisma.assignment.update({
       where: { id: assignmentId },
       data: {
         status: dto.status,
         notes: dto.notes,
       },
     });
+
+    if (
+      this.notifications &&
+      dto.status === AssignmentStatus.COMPLETED &&
+      assignment.status !== AssignmentStatus.COMPLETED &&
+      actorRole === UserRole.STAFF
+    ) {
+      await this.notifications.notifyRoles([UserRole.OWNER, UserRole.COORDINATOR], {
+        category: 'TASK',
+        severity: 'SUCCESS',
+        title: `Task Completed: ${assignment.roleLabel}`,
+        body: `${assignment.assignee?.name ?? 'Crew member'} marked "${assignment.roleLabel}" complete for ${assignment.booking?.reference ?? 'booking'}.`,
+        href: `/admin/bookings/${assignment.bookingId}?section=tasks`,
+        entityType: 'Assignment',
+        entityId: assignment.id,
+      });
+    }
+
+    return updated;
   }
 
   async createDeliverable(bookingId: string, dto: CreateDeliverableDto) {
@@ -314,6 +356,9 @@ export class OperationsService {
   ) {
     const deliverable = await this.prisma.deliverable.findUnique({
       where: { id: deliverableId },
+      include: {
+        booking: { select: { reference: true, eventTitle: true } },
+      },
     });
     if (!deliverable) {
       throw new NotFoundException('Deliverable not found');
@@ -325,7 +370,7 @@ export class OperationsService {
       await this.assertActiveUser(dto.assigneeUserId);
     }
 
-    return this.prisma.deliverable.update({
+    const updated = await this.prisma.deliverable.update({
       where: { id: deliverableId },
       data: {
         assigneeUserId: dto.assigneeUserId,
@@ -334,6 +379,36 @@ export class OperationsService {
         notes: dto.notes,
       },
     });
+
+    if (this.notifications) {
+      const targetUserId = dto.assigneeUserId ?? deliverable.assigneeUserId;
+      if (dto.reviewStatus === DeliverableStatus.CHANGES_REQUESTED && targetUserId) {
+        await this.notifications.notifyUsers([targetUserId], {
+          category: 'DELIVERABLE',
+          severity: 'URGENT',
+          title: `Changes Requested: ${deliverable.label}`,
+          body: `${deliverable.booking.reference} — ${deliverable.booking.eventTitle} requires edits before final delivery.`,
+          href: '/staff',
+          entityType: 'Deliverable',
+          entityId: deliverable.id,
+        });
+      } else if (
+        dto.assigneeUserId &&
+        dto.assigneeUserId !== deliverable.assigneeUserId
+      ) {
+        await this.notifications.notifyUsers([dto.assigneeUserId], {
+          category: 'DELIVERABLE',
+          severity: 'INFO',
+          title: `Deliverable Assigned: ${deliverable.label}`,
+          body: `You are now owner of "${deliverable.label}" on ${deliverable.booking.reference}.`,
+          href: '/staff',
+          entityType: 'Deliverable',
+          entityId: deliverable.id,
+        });
+      }
+    }
+
+    return updated;
   }
 
   async deliverDeliverable(
@@ -348,8 +423,8 @@ export class OperationsService {
       throw new NotFoundException('Deliverable not found');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.deliverable.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const saved = await tx.deliverable.update({
         where: { id: deliverableId },
         data: {
           reviewStatus: DeliverableStatus.DELIVERED,
@@ -363,17 +438,23 @@ export class OperationsService {
         data: {
           actorId: actorUserId,
           entityType: 'Deliverable',
-          entityId: updated.id,
+          entityId: saved.id,
           action: 'DELIVERABLE_DELIVERED',
           details: {
-            bookingId: updated.bookingId,
-            label: updated.label,
+            bookingId: saved.bookingId,
+            label: saved.label,
           },
         },
       });
 
-      return updated;
+      return saved;
     });
+
+    if (this.notifications) {
+      await this.notifications.resolveByEntity('Deliverable', deliverableId);
+    }
+
+    return updated;
   }
 
   async syncDeliverablesFromQuote(bookingId: string) {

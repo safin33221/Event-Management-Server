@@ -3,14 +3,17 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   InquiryStatus,
   Prisma,
   QuoteStatus,
   QuoteVersionStatus,
+  UserRole,
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { getPaginationParams } from '../../common/dto/pagination.dto.js';
 import { toJsonPoisha } from '../../common/money/money.js';
 import {
@@ -21,7 +24,10 @@ import {
 
 @Injectable()
 export class InquiriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationsService,
+  ) {}
 
   async createInquiry(
     dto: CreateInquiryDto,
@@ -42,7 +48,7 @@ export class InquiriesService {
       if (!pkg) throw new BadRequestException('Package not found');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const reference = await this.prisma.nextReference(tx, 'INQ');
       const created = await tx.inquiry.create({
         data: {
@@ -76,6 +82,21 @@ export class InquiriesService {
         activeQuote: null,
       };
     });
+
+    if (source === 'PUBLIC' && this.notifications) {
+      const dateStr = dto.requestedDate ? ` on ${dto.requestedDate}` : '';
+      await this.notifications.notifyRoles([UserRole.OWNER, UserRole.COORDINATOR], {
+        category: 'INQUIRY',
+        severity: 'ACTION',
+        title: `New Client Inquiry (${result.reference})`,
+        body: `${result.clientName} (${result.clientPhone}) requested "${result.eventTitle}"${dateStr}.`,
+        href: '/admin/inquiries',
+        entityType: 'Inquiry',
+        entityId: result.id,
+      });
+    }
+
+    return result;
   }
 
   /**

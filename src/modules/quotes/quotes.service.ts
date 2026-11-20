@@ -10,12 +10,14 @@ import {
   Prisma,
   QuoteStatus,
   QuoteVersionStatus,
+  UserRole,
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { getPaginationParams } from '../../common/dto/pagination.dto.js';
 import { formatTk, sumPoisha, toJsonPoisha, toPoisha } from '../../common/money/money.js';
 import { SOFTILO_DEFAULT_BRANDING } from '../../common/branding/branding-defaults.js';
 import { StudioService } from '../studio/studio.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { provisionDeliverablesFromQuoteAndTemplatesTx } from '../bookings/deliverable-provisioning.js';
 import { buildQuoteProposalPdf } from './quote-pdf.js';
 import {
@@ -31,6 +33,7 @@ export class QuotesService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly studioService?: StudioService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   private computeTotals(items: QuoteLineItemInputDto[], discountInput = 0) {
@@ -464,7 +467,7 @@ export class QuotesService {
       throw new ConflictException('Cannot accept a superseded quote version');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const now = new Date();
       await tx.quoteVersion.updateMany({
         where: { quoteId, status: QuoteVersionStatus.ACCEPTED },
@@ -601,6 +604,23 @@ export class QuotesService {
         },
       };
     });
+
+    if (this.notifications) {
+      await this.notifications.notifyRoles(
+        [UserRole.OWNER, UserRole.COORDINATOR, UserRole.ACCOUNTANT],
+        {
+          category: 'BOOKING',
+          severity: 'INFO',
+          title: `Quote Accepted → ${result.booking.reference}`,
+          body: `${quote.clientName} accepted "${quote.eventTitle}" (${formatTk(result.acceptedVersion.totalPoisha, quote.currency)}) via ${dto.acceptedChannel}. Awaiting advance deposit.`,
+          href: `/admin/bookings/${result.booking.id}`,
+          entityType: 'Booking',
+          entityId: result.booking.id,
+        },
+      );
+    }
+
+    return result;
   }
 
   async listQuotes(query: ListQuotesQueryDto) {

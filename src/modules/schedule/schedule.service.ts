@@ -4,10 +4,12 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
-import { BookingStatus, Prisma, ReservationStatus, SessionStatus } from '../../generated/prisma/client.js';
+import { BookingStatus, Prisma, ReservationStatus, ResourceType, SessionStatus } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import {
   getUtcRangeForLocalDateRange,
   toAgencyLocalDate,
@@ -28,7 +30,10 @@ import {
 
 @Injectable()
 export class ScheduleService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationsService,
+  ) {}
 
   async createResource(dto: CreateResourceDto) {
     if (dto.userId) {
@@ -210,10 +215,10 @@ export class ScheduleService {
       throw new BadRequestException('Invalid startAt / endAt interval');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
         where: { id: bookingId },
-        select: { id: true, reference: true, status: true },
+        select: { id: true, reference: true, status: true, eventTitle: true },
       });
       if (!booking) {
         throw new NotFoundException('Booking not found');
@@ -252,11 +257,44 @@ export class ScheduleService {
         },
       });
 
-      return tx.eventSession.findUnique({
+      const created = await tx.eventSession.findUnique({
         where: { id: session.id },
         include: { reservations: { where: { status: ReservationStatus.RESERVED } } },
       });
+
+      const linkedCrewUsers =
+        dto.resourceIds && dto.resourceIds.length > 0
+          ? await tx.resource.findMany({
+              where: { id: { in: dto.resourceIds }, type: ResourceType.CREW, userId: { not: null } },
+              select: { userId: true },
+            })
+          : [];
+
+      return {
+        created,
+        bookingReference: booking.reference,
+        linkedCrewUserIds: linkedCrewUsers
+          .map((r) => r.userId)
+          .filter((id): id is string => Boolean(id)),
+      };
     });
+
+    if (this.notifications && txResult.created) {
+      await this.notifications.resolveByDedupeKeys([`BOOKING_UNSCHEDULED:${bookingId}`]);
+      if (txResult.linkedCrewUserIds.length > 0) {
+        await this.notifications.notifyUsers(txResult.linkedCrewUserIds, {
+          category: 'SCHEDULE',
+          severity: 'ACTION',
+          title: `Shoot Scheduled: ${txResult.created.title}`,
+          body: `${txResult.bookingReference} reserved your crew profile${txResult.created.location ? ` at ${txResult.created.location}` : ''}. Open Crew Dispatch to view timings.`,
+          href: '/staff',
+          entityType: 'EventSession',
+          entityId: txResult.created.id,
+        });
+      }
+    }
+
+    return txResult.created;
   }
 
   async rescheduleSession(sessionId: string, actorId: string, dto: RescheduleSessionDto) {
@@ -266,12 +304,15 @@ export class ScheduleService {
       throw new BadRequestException('Invalid startAt / endAt interval');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const session = await tx.eventSession.findUnique({
         where: { id: sessionId },
         include: {
           booking: { select: { id: true, reference: true, status: true } },
-          reservations: { where: { status: ReservationStatus.RESERVED } },
+          reservations: {
+            where: { status: ReservationStatus.RESERVED },
+            include: { resource: { select: { userId: true, type: true } } },
+          },
         },
       });
       if (!session) {
@@ -288,6 +329,12 @@ export class ScheduleService {
           `Cannot reschedule sessions for booking ${session.booking.reference} because it is already ${session.booking.status.toLowerCase()}.`,
         );
       }
+
+      const previousUserIds = new Set(
+        session.reservations
+          .filter((r) => r.resource?.type === ResourceType.CREW && r.resource.userId)
+          .map((r) => r.resource.userId as string),
+      );
 
       const targetResourceIds =
         dto.resourceIds ?? session.reservations.map((r) => r.resourceId);
@@ -320,18 +367,73 @@ export class ScheduleService {
         },
       });
 
-      return tx.eventSession.findUnique({
+      const nextResources =
+        targetResourceIds.length > 0
+          ? await tx.resource.findMany({
+              where: { id: { in: targetResourceIds }, type: ResourceType.CREW, userId: { not: null } },
+              select: { userId: true },
+            })
+          : [];
+      const nextUserIds = nextResources
+        .map((r) => r.userId)
+        .filter((id): id is string => Boolean(id));
+      const nextUserSet = new Set(nextUserIds);
+      const removedUserIds = [...previousUserIds].filter((id) => !nextUserSet.has(id));
+
+      const refreshed = await tx.eventSession.findUnique({
         where: { id: updated.id },
         include: { reservations: { where: { status: ReservationStatus.RESERVED } } },
       });
+
+      return {
+        refreshed,
+        bookingReference: session.booking.reference,
+        sessionTitle: session.title,
+        nextUserIds,
+        removedUserIds,
+      };
     });
+
+    if (this.notifications && txResult.refreshed) {
+      if (txResult.nextUserIds.length > 0) {
+        await this.notifications.resolveByDedupeKeys([`SESSION_UNSTAFFED:${sessionId}`]);
+        await this.notifications.notifyUsers(txResult.nextUserIds, {
+          category: 'SCHEDULE',
+          severity: 'ACTION',
+          title: `Shoot Rescheduled: ${txResult.sessionTitle}`,
+          body: `${txResult.bookingReference} slot updated (${dto.reason.trim()}). Check your updated shoot call sheet.`,
+          href: '/staff',
+          entityType: 'EventSession',
+          entityId: sessionId,
+        });
+      }
+      if (txResult.removedUserIds.length > 0) {
+        await this.notifications.notifyUsers(txResult.removedUserIds, {
+          category: 'SCHEDULE',
+          severity: 'INFO',
+          title: `Crew Reassigned: ${txResult.sessionTitle}`,
+          body: `You were released from ${txResult.bookingReference} (${dto.reason.trim()}).`,
+          href: '/staff',
+          entityType: 'EventSession',
+          entityId: sessionId,
+        });
+      }
+    }
+
+    return txResult.refreshed;
   }
 
   async cancelSession(sessionId: string, actorId: string, reason: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const session = await tx.eventSession.findUnique({
         where: { id: sessionId },
-        include: { booking: { select: { reference: true, status: true } } },
+        include: {
+          booking: { select: { reference: true, status: true } },
+          reservations: {
+            where: { status: ReservationStatus.RESERVED },
+            include: { resource: { select: { userId: true, type: true } } },
+          },
+        },
       });
       if (!session) {
         throw new NotFoundException('Session not found');
@@ -344,6 +446,10 @@ export class ScheduleService {
           `Cannot cancel a session on completed booking ${session.booking.reference}.`,
         );
       }
+
+      const crewUserIds = session.reservations
+        .filter((r) => r.resource?.type === ResourceType.CREW && r.resource.userId)
+        .map((r) => r.resource.userId as string);
 
       const updated = await tx.eventSession.update({
         where: { id: sessionId },
@@ -367,8 +473,30 @@ export class ScheduleService {
         },
       });
 
-      return updated;
+      return {
+        updated,
+        bookingReference: session.booking.reference,
+        sessionTitle: session.title,
+        crewUserIds,
+      };
     });
+
+    if (this.notifications) {
+      await this.notifications.resolveByDedupeKeys([`SESSION_UNSTAFFED:${sessionId}`]);
+      if (txResult.crewUserIds.length > 0) {
+        await this.notifications.notifyUsers(txResult.crewUserIds, {
+          category: 'SCHEDULE',
+          severity: 'URGENT',
+          title: `Shoot Cancelled: ${txResult.sessionTitle}`,
+          body: `${txResult.bookingReference} shoot was cancelled (${reason.trim()}). Your calendar slot has been released.`,
+          href: '/staff',
+          entityType: 'EventSession',
+          entityId: sessionId,
+        });
+      }
+    }
+
+    return txResult.updated;
   }
 
   async completeSession(sessionId: string, actorId: string) {

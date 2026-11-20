@@ -46,6 +46,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     }
 
     await this.ensurePortfolioShowcaseTables();
+    await this.ensureNotificationTables();
   }
 
   /**
@@ -191,6 +192,49 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     } catch (err) {
       this.logger.warn(
         `Skipped auto-ensuring portfolio showcase tables: ${(err as Error)?.message ?? String(err)}`,
+      );
+    }
+  }
+
+  private async ensureNotificationTables(): Promise<void> {
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS "notifications" (
+          "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+          "recipient_user_id" UUID NOT NULL,
+          "category" TEXT NOT NULL,
+          "severity" TEXT NOT NULL DEFAULT 'INFO',
+          "title" TEXT NOT NULL,
+          "body" TEXT NOT NULL,
+          "href" TEXT,
+          "entity_type" TEXT,
+          "entity_id" TEXT,
+          "dedupe_key" TEXT,
+          "is_read" BOOLEAN NOT NULL DEFAULT false,
+          "read_at" TIMESTAMP(3),
+          "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
+        );
+
+        CREATE INDEX IF NOT EXISTS "notifications_recipient_read_created_idx"
+          ON "notifications"("recipient_user_id", "is_read", "created_at" DESC);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS "notifications_recipient_dedupe_key_key"
+          ON "notifications"("recipient_user_id", "dedupe_key")
+          WHERE "dedupe_key" IS NOT NULL;
+
+        DO $$ BEGIN
+          ALTER TABLE "notifications"
+            ADD CONSTRAINT "notifications_recipient_user_id_fkey"
+            FOREIGN KEY ("recipient_user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+          WHEN undefined_table THEN NULL;
+        END $$;
+      `);
+    } catch (err) {
+      this.logger.warn(
+        `Skipped auto-ensuring notifications table: ${(err as Error)?.message ?? String(err)}`,
       );
     }
   }

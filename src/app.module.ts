@@ -10,6 +10,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { BookingsModule } from './modules/bookings/bookings.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { InquiriesModule } from './modules/inquiries/inquiries.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { OperationsModule } from './modules/operations/operations.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { QuotesModule } from './modules/quotes/quotes.module.js';
@@ -29,6 +30,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       serviceId: 'event-management-server',
     }),
     PrismaModule,
+    NotificationsModule,
     AuthModule,
     StudioModule,
     CatalogModule,

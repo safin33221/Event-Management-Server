@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   AdjustmentStatus,
@@ -28,6 +29,7 @@ import { PaymentsService } from '../payments/payments.service.js';
 import { ScheduleService } from '../schedule/schedule.service.js';
 import { buildBookingInvoicePdf } from './invoice-pdf.js';
 import { DEFAULT_STUDIO_ID, StudioService } from '../studio/studio.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import {
   provisionDeliverablesFromQuoteAndTemplatesTx,
   QuoteDeliverableItemInput,
@@ -45,6 +47,7 @@ export class BookingsService {
     private readonly paymentsService: PaymentsService,
     private readonly scheduleService: ScheduleService,
     private readonly studioService: StudioService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   private addDaysUtc(baseDate: Date, days: number): Date {
@@ -167,7 +170,7 @@ export class BookingsService {
   }
 
   async confirmBooking(bookingId: string, actorId: string, dto: ConfirmBookingDto) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const [booking, studio] = await Promise.all([
         tx.booking.findUnique({
           where: { id: bookingId },
@@ -389,10 +392,44 @@ export class BookingsService {
         ledger,
       };
     });
+
+    if (this.notifications) {
+      await this.notifications.resolveByDedupeKeys([`READY_TO_CONFIRM:${bookingId}`]);
+
+      const assignedUserIds = [
+        ...new Set(result.assignments.map((a) => a.assigneeUserId)),
+      ];
+      if (assignedUserIds.length > 0) {
+        await this.notifications.notifyUsers(assignedUserIds, {
+          category: 'TASK',
+          severity: 'ACTION',
+          title: `Confirmed Booking Tasks (${result.booking.reference})`,
+          body: `You were assigned workflow tasks for "${result.booking.eventTitle}" (${result.booking.clientName}).`,
+          href: '/staff',
+          entityType: 'Booking',
+          entityId: bookingId,
+        });
+      }
+
+      if (result.sessions.length === 0) {
+        await this.notifications.notifyRoles([UserRole.OWNER, UserRole.COORDINATOR], {
+          category: 'SCHEDULE',
+          severity: 'ACTION',
+          title: `Shoot Slot Needed (${result.booking.reference})`,
+          body: `"${result.booking.eventTitle}" is confirmed—schedule the shoot date and reserve crew.`,
+          href: `/admin/bookings/${bookingId}?section=schedule`,
+          entityType: 'Booking',
+          entityId: bookingId,
+          dedupeKey: `BOOKING_UNSCHEDULED:${bookingId}`,
+        });
+      }
+    }
+
+    return result;
   }
 
   async cancelBooking(bookingId: string, actorId: string, dto: CancelBookingDto) {
-    return this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
         where: { id: bookingId },
       });
@@ -414,6 +451,38 @@ export class BookingsService {
         );
       }
 
+      const [existingAssignments, existingSessions] = await Promise.all([
+        typeof tx.assignment?.findMany === 'function'
+          ? tx.assignment.findMany({
+              where: {
+                bookingId,
+                status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.ACCEPTED] },
+              },
+              select: { assigneeUserId: true },
+            })
+          : Promise.resolve([]),
+        tx.eventSession.findMany({
+          where: { bookingId, status: SessionStatus.SCHEDULED },
+          select: {
+            id: true,
+            reservations: {
+              where: { status: ReservationStatus.RESERVED },
+              select: { resource: { select: { userId: true } } },
+            },
+          },
+        }),
+      ]);
+
+      const affectedCrewIds = new Set<string>();
+      for (const a of existingAssignments) {
+        affectedCrewIds.add(a.assigneeUserId);
+      }
+      for (const s of existingSessions) {
+        for (const r of s.reservations ?? []) {
+          if (r.resource?.userId) affectedCrewIds.add(r.resource.userId);
+        }
+      }
+
       const updated = await tx.booking.update({
         where: { id: bookingId },
         data: {
@@ -422,11 +491,7 @@ export class BookingsService {
         },
       });
 
-      const sessions = await tx.eventSession.findMany({
-        where: { bookingId, status: SessionStatus.SCHEDULED },
-        select: { id: true },
-      });
-      const sessionIds = sessions.map((s) => s.id);
+      const sessionIds = existingSessions.map((s) => s.id);
 
       if (sessionIds.length > 0) {
         await tx.eventSession.updateMany({
@@ -483,10 +548,45 @@ export class BookingsService {
       });
 
       return {
-        ...updated,
-        agreedTotalPoisha: toJsonPoisha(updated.agreedTotalPoisha),
+        booking: {
+          ...updated,
+          agreedTotalPoisha: toJsonPoisha(updated.agreedTotalPoisha),
+        },
+        affectedCrewIds: [...affectedCrewIds],
       };
     });
+
+    if (this.notifications) {
+      await this.notifications.resolveByDedupeKeys([
+        `READY_TO_CONFIRM:${bookingId}`,
+        `BOOKING_UNSCHEDULED:${bookingId}`,
+      ]);
+      await this.notifications.notifyRoles(
+        [UserRole.OWNER, UserRole.COORDINATOR, UserRole.ACCOUNTANT],
+        {
+          category: 'BOOKING',
+          severity: 'URGENT',
+          title: `Booking Cancelled (${txResult.booking.reference})`,
+          body: `"${txResult.booking.eventTitle}" (${txResult.booking.clientName}) was cancelled. Reason: ${dto.reason.trim()}.`,
+          href: `/admin/bookings/${bookingId}`,
+          entityType: 'Booking',
+          entityId: bookingId,
+        },
+      );
+      if (txResult.affectedCrewIds.length > 0) {
+        await this.notifications.notifyUsers(txResult.affectedCrewIds, {
+          category: 'SCHEDULE',
+          severity: 'URGENT',
+          title: `Shoot & Tasks Cancelled (${txResult.booking.reference})`,
+          body: `"${txResult.booking.eventTitle}" was cancelled (${dto.reason.trim()}). Your shoot reservation has been released.`,
+          href: '/staff',
+          entityType: 'Booking',
+          entityId: bookingId,
+        });
+      }
+    }
+
+    return txResult.booking;
   }
 
   async completeBooking(bookingId: string, actorId: string) {

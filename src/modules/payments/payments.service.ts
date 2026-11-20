@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   AdjustmentStatus,
@@ -15,9 +16,11 @@ import {
   PaymentMethod,
   PaymentType,
   Prisma,
+  UserRole,
   VerificationState,
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { hashIdempotencyPayload } from '../../common/crypto/hash.js';
 import {
   computeRequiredAdvancePoisha,
@@ -56,7 +59,10 @@ export interface BookingLedgerSummary {
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationsService,
+  ) {}
 
   private serializeEntry(entry: PaymentEntry) {
     return {
@@ -225,10 +231,10 @@ export class PaymentsService {
       transactionRef: dto.transactionRef ?? null,
     });
 
-    return this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
         where: { id: bookingId },
-        select: { id: true, reference: true, currency: true, status: true },
+        select: { id: true, reference: true, currency: true, status: true, clientName: true },
       });
       if (!booking) {
         throw new NotFoundException('Booking not found');
@@ -257,6 +263,7 @@ export class PaymentsService {
           return {
             entry: this.serializeEntry(existing),
             idempotentReplay: true,
+            bookingMeta: booking,
           };
         }
       }
@@ -319,12 +326,37 @@ export class PaymentsService {
       return {
         entry: this.serializeEntry(entry),
         idempotentReplay: false,
+        bookingMeta: booking,
       };
     });
+
+    if (!txResult.idempotentReplay && this.notifications) {
+      const trxLabel = txResult.entry.transactionRef
+        ? ` • TrxID ${txResult.entry.transactionRef}`
+        : '';
+      const clientLabel = txResult.bookingMeta.clientName
+        ? ` for ${txResult.bookingMeta.clientName}`
+        : '';
+      await this.notifications.notifyRoles([UserRole.OWNER, UserRole.ACCOUNTANT], {
+        category: 'PAYMENT',
+        severity: 'ACTION',
+        title: `Verify Payment (${txResult.bookingMeta.reference})`,
+        body: `${txResult.entry.method} ${formatTk(txResult.entry.amountPoisha, txResult.entry.currency)}${trxLabel}${clientLabel} awaiting verification.`,
+        href: `/admin/bookings/${bookingId}`,
+        entityType: 'PaymentEntry',
+        entityId: txResult.entry.id,
+        dedupeKey: `PAYMENT_PENDING:${txResult.entry.id}`,
+      });
+    }
+
+    return {
+      entry: txResult.entry,
+      idempotentReplay: txResult.idempotentReplay,
+    };
   }
 
   async verifyPayment(paymentId: string, actorId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.paymentEntry.findUnique({
         where: { id: paymentId },
       });
@@ -333,7 +365,7 @@ export class PaymentsService {
       }
       const booking = await tx.booking.findUnique({
         where: { id: existing.bookingId },
-        select: { reference: true, status: true, currency: true },
+        select: { reference: true, status: true, currency: true, clientName: true },
       });
       if (booking?.status === BookingStatus.CANCELLED) {
         throw new ConflictException(
@@ -345,6 +377,8 @@ export class PaymentsService {
           entry: this.serializeEntry(existing),
           ledger: await this.computeLedgerSummaryTx(tx, existing.bookingId),
           bookingStatus: booking?.status ?? null,
+          bookingReference: booking?.reference ?? '',
+          alreadyVerified: true,
         };
       }
       if (existing.verificationState === VerificationState.REJECTED) {
@@ -386,12 +420,42 @@ export class PaymentsService {
         entry: this.serializeEntry(updated),
         ledger,
         bookingStatus: booking?.status ?? null,
+        bookingReference: booking?.reference ?? '',
+        alreadyVerified: false,
       };
     });
+
+    if (!txResult.alreadyVerified && this.notifications) {
+      await this.notifications.resolveByDedupeKeys([
+        `PAYMENT_PENDING:${paymentId}`,
+        `PAYMENT_PENDING_REMINDER:${paymentId}`,
+      ]);
+      if (
+        txResult.bookingStatus === BookingStatus.PENDING_CONFIRMATION &&
+        txResult.ledger.isAdvanceMet
+      ) {
+        await this.notifications.notifyRoles([UserRole.OWNER, UserRole.COORDINATOR], {
+          category: 'BOOKING',
+          severity: 'SUCCESS',
+          title: `Ready to Confirm (${txResult.bookingReference})`,
+          body: `Advance requirement met (${formatTk(txResult.ledger.verifiedReceiptsPoisha, txResult.ledger.currency)} verified). Confirm booking to lock event workflow.`,
+          href: `/admin/bookings/${txResult.entry.bookingId}`,
+          entityType: 'Booking',
+          entityId: txResult.entry.bookingId,
+          dedupeKey: `READY_TO_CONFIRM:${txResult.entry.bookingId}`,
+        });
+      }
+    }
+
+    return {
+      entry: txResult.entry,
+      ledger: txResult.ledger,
+      bookingStatus: txResult.bookingStatus,
+    };
   }
 
   async rejectPayment(paymentId: string, actorId: string, reason: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.paymentEntry.findUnique({
         where: { id: paymentId },
       });
@@ -403,6 +467,11 @@ export class PaymentsService {
           'Cannot reject an already verified payment; issue a reversal or refund instead',
         );
       }
+
+      const booking = await tx.booking.findUnique({
+        where: { id: existing.bookingId },
+        select: { reference: true, clientName: true },
+      });
 
       const updated = await tx.paymentEntry.update({
         where: { id: paymentId },
@@ -424,8 +493,35 @@ export class PaymentsService {
         },
       });
 
-      return this.serializeEntry(updated);
+      return {
+        serialized: this.serializeEntry(updated),
+        recordedById: existing.recordedById,
+        bookingReference: booking?.reference ?? '',
+        clientName: booking?.clientName ?? 'client',
+      };
     });
+
+    if (this.notifications) {
+      await this.notifications.resolveByDedupeKeys([
+        `PAYMENT_PENDING:${paymentId}`,
+        `PAYMENT_PENDING_REMINDER:${paymentId}`,
+      ]);
+      await this.notifications.notifyRoles(
+        [UserRole.OWNER, UserRole.COORDINATOR],
+        {
+          category: 'PAYMENT',
+          severity: 'URGENT',
+          title: `Payment Rejected (${txResult.bookingReference || txResult.serialized.bookingId})`,
+          body: `${txResult.serialized.method} ${formatTk(txResult.serialized.amountPoisha, txResult.serialized.currency)} for ${txResult.clientName} was rejected: "${reason.trim()}".`,
+          href: `/admin/bookings/${txResult.serialized.bookingId}`,
+          entityType: 'PaymentEntry',
+          entityId: txResult.serialized.id,
+        },
+        txResult.recordedById ? [txResult.recordedById] : [],
+      );
+    }
+
+    return txResult.serialized;
   }
 
   async issueRefund(
