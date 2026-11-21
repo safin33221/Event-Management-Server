@@ -17,23 +17,59 @@ export function configureApp(app: INestApplication): void {
     next();
   });
 
-  const configuredOrigins = (process.env.CORS_ORIGINS ?? '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  const allowedOrigins =
-    configuredOrigins.length > 0
-      ? configuredOrigins
-      : process.env.NODE_ENV === 'production'
-        ? []
-        : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+  const defaultAllowedOrigins = [
+    'https://wedding-photo-art.vercel.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+  ];
 
-  if (allowedOrigins.length > 0) {
-    app.enableCors({
-      origin: allowedOrigins,
-      credentials: true,
-    });
-  }
+  const configuredOrigins = [
+    process.env.CORS_ORIGINS ?? '',
+    process.env.FRONTEND_URL ?? '',
+    process.env.CLIENT_URL ?? '',
+  ]
+    .join(',')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/+$/, '').toLowerCase())
+    .filter(Boolean);
+
+  const allowedOriginSet = new Set<string>([
+    ...defaultAllowedOrigins.map((o) => o.toLowerCase()),
+    ...configuredOrigins,
+  ]);
+
+  app.enableCors({
+    origin: (
+      requestOrigin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      // Allow server-to-server requests (Next.js Server Actions / SSR) with no Origin header
+      if (!requestOrigin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = requestOrigin.trim().replace(/\/+$/, '').toLowerCase();
+      if (
+        allowedOriginSet.has('*') ||
+        allowedOriginSet.has(normalized) ||
+        /^https:\/\/wedding-photo-art(-[a-z0-9-]+)?\.vercel\.app$/i.test(normalized)
+      ) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Idempotency-Key',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+    ],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
